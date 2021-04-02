@@ -1,4 +1,6 @@
 <launch>
-    <param name="file_name" type="string" value="/home/simulation/MAP/sc-lego-loam/carla-yuquan-64-remote-notrees-2/trajectory.pcd" />
+    <param name="file_name" type="string" value="/mnt/hgfs/lab-ubuntu/Experiment/carla0.9.11-yuquan-notrees/map/trajectory.pcd" />
+    <param name="folder_name" type="string" value="readfiles/data/" />
+
     <node pkg="read_pcd" type="read_pcd" name="read_pcd" output="screen" />
 </launch>

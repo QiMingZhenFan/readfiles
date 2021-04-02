@@ -1,15 +1,42 @@
+#include "ros/init.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <vector>
+#include <ros/ros.h>
+#include <std_msgs/Bool.h>
 
 using namespace std;
 
-int main(){
+bool readytogo = false;
 
-    string folder_name = "/home/simulation/workspace/my_ws/src/data/";
+void subHandler(const std_msgs::BoolConstPtr &data)
+{
+    readytogo = true;
+    ROS_INFO_STREAM("ready to perform dataTOTUM... ");
+
+}
+
+int main(int argc, char** argv){
+
+    ros::init(argc, argv, "dataTOTUM");
+    ros::NodeHandle nh;
+
+    ros::Subscriber subReadTFFinish = nh.subscribe<std_msgs::Bool>("/read_pcd_finished", 10, subHandler);
+
+    while (!readytogo){
+        ros::spinOnce();
+        ros::Duration(0.5).sleep();
+    }
+
+    string folder_name;
     string filename[] = {"trajectory_aftmapped.csv", "trajectory_gt.csv"};
+
+    if (nh.getParam("csv_folder_name", folder_name) == false){
+        ROS_INFO_STREAM("please set the csv folder name!");
+        return 1;
+    }
 
     for(auto name : filename){
         ifstream inFile(folder_name + name, ios::in);
@@ -39,6 +66,6 @@ int main(){
         outFile.close();
 
     }
-    cout << " convert to TUM finished! " << endl;
+    ROS_INFO_STREAM("[3/3] convert to TUM finished! ");
     return 0;
 }

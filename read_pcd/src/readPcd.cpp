@@ -1,4 +1,6 @@
+#include "ros/duration.h"
 #include "ros/init.h"
+#include "std_msgs/Bool.h"
 #include <iostream>
 #include <fstream>
 #include <pcl/io/pcd_io.h>
@@ -11,17 +13,40 @@
 
 using namespace std;
 
+bool readytogo = false;
+
+void subHandler(const std_msgs::BoolConstPtr &data)
+{
+    readytogo = true;
+    ROS_INFO_STREAM("ready to perform readPCD... ");
+
+}
+
 int main(int argc, char** argv)
 {  
     ros::init(argc, argv, "readPcd");
     ros::NodeHandle nh;
-    string filename;
-    string folder_name = "/home/simulation/workspace/my_ws/src/data/";
+    ros::Subscriber subReadTFFinish = nh.subscribe<std_msgs::Bool>("/read_tf_finished", 10, subHandler);
+    ros::Publisher pubReadPcdfinish = nh.advertise<std_msgs::Bool>("/read_pcd_finished", 1);
 
-    if (nh.getParam("file_name", filename) == false){
+    while (!readytogo){
+        ros::spinOnce();
+        ros::Duration(0.5).sleep();
+    }
+
+    string filename;
+    string folder_name;
+
+    if (nh.getParam("pcd_file_name", filename) == false){
         ROS_INFO_STREAM("please set the target PCD file name!");
         return -1;
     }
+
+    if (nh.getParam("csv_folder_name", folder_name) == false){
+        ROS_INFO_STREAM("please set the csv folder name!");
+        return 1;
+    }
+
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
     if(pcl::io::loadPCDFile<pcl::PointXYZ>(filename, *cloud) == -1){
@@ -71,6 +96,9 @@ int main(int argc, char** argv)
     // pcl::visualization::CloudViewer viewer("cloud viewer");
     // viewer.showCloud(cloud);
 
-    ros::spin();
+    std_msgs::Bool ready;
+    ready.data = true;
+    pubReadPcdfinish.publish(ready);
+    ROS_INFO_STREAM("[2/3] read pcd finished! ");
     return 0;
 }

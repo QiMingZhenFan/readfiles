@@ -1,6 +1,8 @@
 #include "geometry_msgs/Vector3.h"
 #include "ros/init.h"
+#include "ros/message_traits.h"
 #include "ros/node_handle.h"
+#include "ros/publisher.h"
 #include "ros/time.h"
 #include "rosbag/message_instance.h"
 #include "rosbag/query.h"
@@ -15,6 +17,7 @@
 #include <tf/tfMessage.h>
 #include <utility>
 #include <vector>
+#include <std_msgs/Bool.h>
 
 #define foreach BOOST_FOREACH
 
@@ -22,15 +25,21 @@ using namespace std;
 
 int main(int argc, char** argv){
     
-    ros:ros::init(argc, argv, "readBag");
+    ros::init(argc, argv, "readBag");
     ros::NodeHandle nh;
+    ros::Publisher pubReadTFfinish = nh.advertise<std_msgs::Bool>("/read_tf_finished", 1);
     rosbag::Bag bag;
     string file_name;
     // string folder_name = "";  // cannot use ----- in ~/.ros
-    string folder_name = "/home/simulation/workspace/my_ws/src/data/";
+    string folder_name;
 
-    if (nh.getParam("file_name", file_name) == false){
+    if (nh.getParam("bag_file_name", file_name) == false){
         ROS_INFO_STREAM("please set the bag file name!");
+        return 1;
+    }
+
+    if (nh.getParam("csv_folder_name", folder_name) == false){
+        ROS_INFO_STREAM("please set the csv folder name!");
         return 1;
     }
 
@@ -43,13 +52,13 @@ int main(int argc, char** argv){
     }
 
     ofstream outFile_gt(folder_name + "trajectory_gt.csv", ios::out);
-    if (!outFile_gt) {
+    if (!outFile_gt.is_open()) {
         ROS_ERROR_STREAM("Cannot open the trajectory_gt.csv!");
         return 1;
     }
 
     ofstream outFile_aftmapped(folder_name + "trajectory_aftmapped.csv", ios::out);
-    if (!outFile_aftmapped) {
+    if (!outFile_aftmapped.is_open()) {
         ROS_ERROR_STREAM("Cannot open the trajectory_aftmapped.csv!");
         return 1;
     }
@@ -111,7 +120,10 @@ int main(int argc, char** argv){
     outFile_aftmapped.close();
     ROS_INFO_STREAM("outFile_aftmapped closed");
 
-    ros::spin();
+    std_msgs::Bool ready;
+    ready.data = true;
+    pubReadTFfinish.publish(ready);
+    ROS_INFO_STREAM("[1/3] read tf finished! ");
     return  0; 
 
 }

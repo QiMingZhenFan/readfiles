@@ -162,6 +162,9 @@ target_link_libraries(changeXYZ
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
 )
+target_link_libraries(dataToTUM
+  ${catkin_LIBRARIES}
+)
 #############
 ## Install ##
 #############
