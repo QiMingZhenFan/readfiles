@@ -1,6 +1,0 @@
-<launch>
-    <param name="file_name" type="string" value="/mnt/hgfs/lab-ubuntu/bag/carla-yuquan-64-remote-notrees.bag" />
-    <!-- <node pkg="read_bag" type="readTF" name="readTF" output="screen" /> -->
-    <node pkg="read_bag" type="readPointCloud" name="readPointCloud" output="screen" />
-
-</launch>
