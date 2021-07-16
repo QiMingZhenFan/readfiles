@@ -49,6 +49,7 @@ int main(int argc, char** argv)
             cloud_new->points.push_back(point);
 
             // 为什么这样不行？
+            // auto处没有引用符
             // float temp;
             // temp = data.z;
             // data.z = data.y;
