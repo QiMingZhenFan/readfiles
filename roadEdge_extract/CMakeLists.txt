@@ -19,6 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(PCL REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -123,7 +124,7 @@ include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
-  
+  ${EIGEN3_INCLUDE_DIRS}  
 )
 include(src/3rdparty/opennurbs/openNURBS.cmake)
 include(src/on_nurbs/on_nurbs.cmake) 

@@ -13,7 +13,7 @@ yellow = carla.Color(255, 255, 0)
 orange = carla.Color(255, 162, 0)
 white = carla.Color(255, 255, 255)
 
-file_destination = "./data/airport_07_15/"
+file_destination = "./data/airport_07_24/"
 # 记录已经设置过得unique_id
 # unique_id : order(from 0)
 cross_unique_id_used = dict()
@@ -164,80 +164,87 @@ def main():
 
     # 写入csv文件中
     # TODO: 可以直接写成函数，或者起一个公共变量引用
-    for unique_id in cross_unique_id_used.keys():
-        unique_id_to_order = cross_unique_id_used[unique_id]
-        # 文件名和id号都要换掉
-        file_name = 'cross_' + str(unique_id_to_order) + '.csv'
-        with open(file_destination + file_name, 'w') as f:
-            writer = csv.writer(f)
-            writer.writerow([unique_id_to_order])
-            writer.writerow([road_length[unique_id]])
-            writer.writerow([0])
-            writer.writerow(unique_ids_to_order(pre_ids[unique_id], 'lane'))
-            writer.writerow(unique_ids_to_order(next_ids[unique_id], 'lane'))
-            for waypoint in waypoints_in_lanes[unique_id]:
-                # carla右手系
-                data = [waypoint.transform.location.x, -waypoint.transform.location.y, waypoint.transform.location.z, 0, 0, 0, 0]
-                writer.writerow(data)
-    for unique_id in lane_unique_id_used.keys():
-        unique_id_to_order = lane_unique_id_used[unique_id]
-        # 文件名和id号都要换掉
-        file_name = 'lane_' + str(unique_id_to_order) + '.csv'
-        with open(file_destination + file_name, 'w') as f:
-            writer = csv.writer(f)
-            writer.writerow([unique_id_to_order])
-            writer.writerow([road_length[unique_id]])
-            writer.writerow([0])
-            writer.writerow(unique_ids_to_order(pre_ids[unique_id], 'cross'))
-            writer.writerow(unique_ids_to_order(next_ids[unique_id], 'cross'))
-            for waypoint in waypoints_in_lanes[unique_id]:
-                # carla右手系
-                data = [waypoint.transform.location.x, -waypoint.transform.location.y, waypoint.transform.location.z, 0, 0, 0, 0]
-                writer.writerow(data)
+    # for unique_id in cross_unique_id_used.keys():
+    #     unique_id_to_order = cross_unique_id_used[unique_id]
+    #     # 文件名和id号都要换掉
+    #     file_name = 'cross_' + str(unique_id_to_order) + '.csv'
+    #     with open(file_destination + file_name, 'w') as f:
+    #         writer = csv.writer(f)
+    #         writer.writerow([unique_id_to_order])
+    #         writer.writerow([road_length[unique_id]])
+    #         writer.writerow([0])
+    #         writer.writerow(unique_ids_to_order(pre_ids[unique_id], 'lane'))
+    #         writer.writerow(unique_ids_to_order(next_ids[unique_id], 'lane'))
+    #         for waypoint in waypoints_in_lanes[unique_id]:
+    #             # carla右手系
+    #             data = [waypoint.transform.location.x, -waypoint.transform.location.y, waypoint.transform.location.z, 0, 0, 0, 0]
+    #             writer.writerow(data)
+    # for unique_id in lane_unique_id_used.keys():
+    #     unique_id_to_order = lane_unique_id_used[unique_id]
+    #     # 文件名和id号都要换掉
+    #     file_name = 'lane_' + str(unique_id_to_order) + '.csv'
+    #     with open(file_destination + file_name, 'w') as f:
+    #         writer = csv.writer(f)
+    #         writer.writerow([unique_id_to_order])
+    #         writer.writerow([road_length[unique_id]])
+    #         writer.writerow([0])
+    #         writer.writerow(unique_ids_to_order(pre_ids[unique_id], 'cross'))
+    #         writer.writerow(unique_ids_to_order(next_ids[unique_id], 'cross'))
+    #         for waypoint in waypoints_in_lanes[unique_id]:
+    #             # carla右手系
+    #             data = [waypoint.transform.location.x, -waypoint.transform.location.y, waypoint.transform.location.z, 0, 0, 0, 0]
+    #             writer.writerow(data)
 
-        #  -----------------------------------------------------------------------  #
-        # if start.is_junction == end.is_junction:
-        #     # check: 可能发生lane连接lane junction连接junction的情况
-        #     # print("junction or not: ", start.is_junction)
-        #     pass
-        # waypoints = []
-        # waypoints = start.next_until_lane_end(delta_meters)
-        # if waypoints is None:
-        #     waypoints = start.previous_until_lane_end(delta_meters)
-        #     print("start wp is an end of a road! eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
-        # else:
-        #     # 目测都是start点
-        #     print("start wp is an start of a road! sssssssssssssssssssssssssssssssssssssssssss")
-        # # 可视化展示
-        # for waypoint in waypoints:
-        #     # print("waypoint id: %s\troad_id: %s\tsection_id: %s\tlane_id: %s\tis_junction: %s" % (str(waypoint.id), str(waypoint.road_id), str(waypoint.section_id), str(waypoint.lane_id), str(waypoint.is_junction)))    
-        #     # check: 一条lane上都是一种点
-        #     if waypoint.is_junction != start.is_junction:
-        #         print("waypoint is_junction changed!")
-        #         debug.draw_point(waypoint.transform.location + carla.Location(z=0.25), 0.05, red, lt, False)
-        #     else:
-        #         debug.draw_point(waypoint.transform.location + carla.Location(z=0.25), 0.05, green, lt, False)
+
+    #  -----------------------------------------------------------------------  #
+    if start.is_junction == end.is_junction:
+        # check: 可能发生lane连接lane junction连接junction的情况
+        # print("junction or not: ", start.is_junction)
+        pass
+    for node in topology:
+        start = node[0]
+        end = node[1]
+
+        waypoints = []
+        waypoints = start.next_until_lane_end(delta_meters)
+        if waypoints is None:
+            waypoints = start.previous_until_lane_end(delta_meters)
+            print("start wp is an end of a road! eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+        else:
+            # 目测都是start点
+            print("start wp is an start of a road! sssssssssssssssssssssssssssssssssssssssssss")
+        # 可视化展示
+        for waypoint in waypoints:
+            # print("waypoint id: %s\troad_id: %s\tsection_id: %s\tlane_id: %s\tis_junction: %s" % (str(waypoint.id), str(waypoint.road_id), str(waypoint.section_id), str(waypoint.lane_id), str(waypoint.is_junction)))    
+            # check: 一条lane上都是一种点
+            if waypoint.is_junction != start.is_junction:
+                # print("waypoint is_junction changed!")
+                debug.draw_point(waypoint.transform.location + carla.Location(z=0.25), 0.05, red, lt, False)
+            else:
+                # time.sleep(0.5)
+                debug.draw_point(waypoint.transform.location + carla.Location(z=0.25), 0.05, green, lt, False)
 
         # #  -----------------------------------------------------------------------  #
 
-        # waypoints = []
-        # waypoints = end.next_until_lane_end(delta_meters)
-        # if waypoints is None:
-        #     waypoints = start.previous_until_lane_end(delta_meters)
-        #     print("end wp is an end of a road! eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
-        # else:
-        #     print("end wp is an start of a road! sssssssssssssssssssssssssssssssssssssssssss")
-        # # 可视化展示
-        # for waypoint in waypoints:
-        #     # print("waypoint id: %s\troad_id: %s\tsection_id: %s\tlane_id: %s\tis_junction: %s" % (str(waypoint.id), str(waypoint.road_id), str(waypoint.section_id), str(waypoint.lane_id), str(waypoint.is_junction)))    
-        #     if waypoint.is_junction != end.is_junction:
-        #         print("waypoint is_junction changed!")
-        #         debug.draw_point(waypoint.transform.location + carla.Location(z=0.25), 0.05, red, lt, False)
-        #     else:
-        #         debug.draw_point(waypoint.transform.location + carla.Location(z=0.25), 0.05, green, lt, False)
-        # time.sleep(2)
+        waypoints = []
+        waypoints = end.next_until_lane_end(delta_meters)
+        if waypoints is None:
+            waypoints = start.previous_until_lane_end(delta_meters)
+            print("end wp is an end of a road! eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+        else:
+            print("end wp is an start of a road! sssssssssssssssssssssssssssssssssssssssssss")
+        # 可视化展示
+        for waypoint in waypoints:
+            # print("waypoint id: %s\troad_id: %s\tsection_id: %s\tlane_id: %s\tis_junction: %s" % (str(waypoint.id), str(waypoint.road_id), str(waypoint.section_id), str(waypoint.lane_id), str(waypoint.is_junction)))    
+            if waypoint.is_junction != end.is_junction:
+                # print("waypoint is_junction changed!")
+                debug.draw_point(waypoint.transform.location + carla.Location(z=0.25), 0.05, red, lt, False)
+            else:
+                # time.sleep(0.5)
+                debug.draw_point(waypoint.transform.location + carla.Location(z=0.25), 0.05, green, lt, False)
+    #     # time.sleep(2)
 
-        # raw_input("input a key to continue! -------------------------------------------------")
+    # raw_input("input a key to continue! -------------------------------------------------")
 
     print('done.')
 
