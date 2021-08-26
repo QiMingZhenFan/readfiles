@@ -18,6 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(PCL REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -109,7 +110,7 @@ catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES read_pcd
   CATKIN_DEPENDS rosbag roscpp std_msgs tf
-  DEPENDS PCL
+  DEPENDS PCL Eigen3
 )
 
 ###########
@@ -122,6 +123,7 @@ include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
+  ${Eigen3_INCLUDE_DIRS}
 
 )
 
@@ -156,10 +158,12 @@ add_executable(changeXYZ src/changeXYZ.cpp)
 ## Specify libraries to link a library or executable target against
 target_link_libraries(${PROJECT_NAME}
   ${catkin_LIBRARIES}
+  ${Eigen3_LIBRARIES}
   ${PCL_LIBRARIES}
 )
 target_link_libraries(changeXYZ
   ${catkin_LIBRARIES}
+  ${Eigen3_LIBRARIES}
   ${PCL_LIBRARIES}
 )
 target_link_libraries(dataToTUM

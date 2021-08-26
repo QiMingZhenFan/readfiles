@@ -18,6 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## System dependencies are found with CMake's conventions
 find_package(PCL REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -123,6 +124,7 @@ include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
+  ${Eigen3_INCLUDE_DIRS}
 
 )
 
@@ -159,7 +161,7 @@ target_link_libraries(readTF
 target_link_libraries(readPointCloud
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
-
+  ${Eigen3_LIBRARIES}
 )
 #############
 ## Install ##

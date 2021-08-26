@@ -1,4 +1,4 @@
 <launch>
-    <param name="foldername" type="string" value="/mnt/hgfs/lab-ubuntu/Experiment/carla0.9.11-yuquan-notrees/map" />
+    <param name="foldername" type="string" value="/home/mrk/Experiment/airport-0723/full/withSC" />
     <node pkg="read_pcd" type="changeXYZ" name="changeXYZ" output="screen" />
 </launch>
