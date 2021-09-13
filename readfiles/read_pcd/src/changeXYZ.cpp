@@ -56,7 +56,7 @@ int main(int argc, char** argv)
             // data.y = data.x;
             // data.x = temp;
             align_to_the_carla_coord(data);
-            ROS_INFO_STREAM("processing file " << file_name[i] << ". finished points "<< count << " in total " << cloud->width);
+            // ROS_INFO_STREAM("processing file " << file_name[i] << ". finished points "<< count << " in total " << cloud->width);
         }
         pcl::io::savePCDFile(foldername + file_name[i], *cloud);
 
@@ -88,9 +88,24 @@ int main(int argc, char** argv)
     z: -0.991441788137
     w: 0.130531199353
 */
+/*
+  09.08后的bag起始坐标
+  position: 
+    x: -92.7017593384
+    y: -20.9991703033
+    z: -0.0236528590322
+  orientation: 
+    x: -0.00218778657177
+    y: -1.78807609571e-05
+    z: -0.999997606622
+    w: 4.43330363281e-06
+
+*/
 void transform_param_set(Eigen::Vector3d &translation, Eigen::Quaterniond &rotation){
-    translation = Eigen::Vector3d(-93.0018081665, -22.9996166229, -0.0236528962851);
-    rotation = Eigen::Quaterniond(0.130531199353, -0.0021667339934, -0.000303305188324, -0.991441788137);
+    translation = Eigen::Vector3d(-92.7017593384, -20.9991703033, -0.0236528590322);
+    // in w,x,y,z
+    rotation = Eigen::Quaterniond(4.43330363281e-06, -0.00218778657177, -1.78807609571e-05, -0.999997606622);
+    // ROS_INFO_STREAM(rotation.matrix());
 }
 void align_to_the_carla_coord(pcl::PointXYZ &point){
     Eigen::Vector3d data(point.x, point.y,point.z);

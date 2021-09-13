@@ -144,6 +144,7 @@ include_directories(
 add_executable(${PROJECT_NAME} src/readPcd.cpp)
 add_executable(dataToTUM src/dataToTUM.cpp)
 add_executable(changeXYZ src/changeXYZ.cpp)
+add_executable(downsample src/downsample.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -165,6 +166,11 @@ target_link_libraries(changeXYZ
   ${catkin_LIBRARIES}
   ${Eigen3_LIBRARIES}
   ${PCL_LIBRARIES}
+)
+target_link_libraries(downsample
+${catkin_LIBRARIES}
+${Eigen3_LIBRARIES}
+${PCL_LIBRARIES}
 )
 target_link_libraries(dataToTUM
   ${catkin_LIBRARIES}
