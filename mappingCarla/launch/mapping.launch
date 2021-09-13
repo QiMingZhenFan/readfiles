@@ -1,0 +1,5 @@
+<launch>
+    <node pkg="mappingCarla" type="mappingCarla" name="mappingCarla" output="screen"  launch-prefix="xterm -e gdb -ex run --args " />
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find mappingCarla)/rviz/mapping.rviz" />
+    <!-- <node pkg="rviz" type="rviz" name="rviz" args="" /> -->
+</launch>
