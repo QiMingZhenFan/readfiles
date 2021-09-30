@@ -1,4 +1,6 @@
 <launch>
-    <param name="foldername" type="string" value="/home/mrk/Experiment/airport-0903/map" />
+    <!-- <param name="foldername" type="string" value="/home/mrk/Experiment/airport-0903/map" /> -->
+    <param name="foldername" type="string" value="/tmp/" />
+    <param name="voxel_size" type="double" value="0.2" />
     <node pkg="read_pcd" type="downsample" name="downsample" output="screen" />
 </launch>

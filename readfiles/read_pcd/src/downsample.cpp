@@ -21,15 +21,20 @@ int main(int argc, char** argv)
     ros::NodeHandle nh;
     string foldername;
     string file_name[3] = {"surfaceMap.pcd","cornerMap.pcd","finalCloud.pcd"};
+    double voxel_leaf_size = 0.0;
 
     if (nh.getParam("foldername", foldername) == false){
         ROS_INFO_STREAM("please set the target PCD file name!");
         return -1;
     }
+    if (nh.getParam("voxel_size", voxel_leaf_size) == false){
+        ROS_INFO_STREAM("please set the voxel size for downsample!");
+        return -1;
+    }
     if (foldername.back() != '/') {
         foldername += '/';
     }
-    ROS_INFO_STREAM("the pcd file folder is: " + foldername);
+    ROS_INFO_STREAM("the pcd file folder is: " + foldername << ". leaf size is: " << voxel_leaf_size);
     ROS_INFO_STREAM("press any key to conntinue...");
     string key;
     cin >> key;
@@ -46,7 +51,7 @@ int main(int argc, char** argv)
         // 创建滤波器对象
         pcl::VoxelGrid<pcl::PointXYZ> sor;//滤波处理对象
         sor.setInputCloud(cloud);
-        sor.setLeafSize(0.5f, 0.5f, 0.5f);//设置滤波器处理时采用的体素大小的参数
+        sor.setLeafSize(voxel_leaf_size, voxel_leaf_size, voxel_leaf_size);//设置滤波器处理时采用的体素大小的参数
         sor.filter(*aft_filter);
         pcl::io::savePCDFile(foldername + "filtered_" + file_name[i], *aft_filter);
 
