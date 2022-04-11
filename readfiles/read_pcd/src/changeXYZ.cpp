@@ -23,9 +23,14 @@ int main(int argc, char** argv)
     ros::NodeHandle nh;
     string foldername;
     string file_name[3] = {"surfaceMap.pcd","cornerMap.pcd","finalCloud.pcd"};
+    int map_file_start_index = 0;
 
     if (nh.getParam("foldername", foldername) == false){
         ROS_INFO_STREAM("please set the target PCD file name!");
+        return -1;
+    }
+    if (nh.getParam("map_file_start_index", map_file_start_index) == false){
+        ROS_INFO_STREAM("please set the map_file_start_index!");
         return -1;
     }
     if (foldername.back() != '/') {
@@ -37,7 +42,7 @@ int main(int argc, char** argv)
     cin >> key;
 
     transform_param_set(translation, rotation);
-    int i = 2;
+    int i = map_file_start_index;
     while (i < 3) {
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
         // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_new(new pcl::PointCloud<pcl::PointXYZ>);
@@ -49,13 +54,13 @@ int main(int argc, char** argv)
         int count = 0;
         for(auto &data : cloud->points)
         {
-            count++;
-            // float temp;
-            // temp = data.z;
-            // data.z = data.y;
-            // data.y = data.x;
-            // data.x = temp;
-            align_to_the_carla_coord(data);
+            // count++;
+            float temp;
+            temp = data.z;
+            data.z = data.y;
+            data.y = data.x;
+            data.x = temp;
+            // align_to_the_carla_coord(data);
             // ROS_INFO_STREAM("processing file " << file_name[i] << ". finished points "<< count << " in total " << cloud->width);
         }
         pcl::io::savePCDFile(foldername + file_name[i], *cloud);

@@ -1,4 +1,6 @@
 <launch>
-    <param name="foldername" type="string" value="/home/mrk/Experiment/airport-0903/map" />
+    <!-- <param name="foldername" type="string" value="/home/mrk/Experiment/11.09night/sc-lego-loam-map" /> -->
+    <param name="foldername" type="string" value="/tmp" />
+    <param name="map_file_start_index" type="int" value="0" />
     <node pkg="read_pcd" type="changeXYZ" name="changeXYZ" output="screen" />
 </launch>

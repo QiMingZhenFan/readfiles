@@ -1,4 +1,8 @@
 #include "geometry_msgs/Vector3.h"
+#include <geometry_msgs/TransformStamped.h>
+#include <nav_msgs/Path.h>
+#include <tf/tfMessage.h>
+#include <std_msgs/Bool.h>
 #include "ros/init.h"
 #include "ros/message_traits.h"
 #include "ros/node_handle.h"
@@ -6,22 +10,24 @@
 #include "ros/time.h"
 #include "rosbag/message_instance.h"
 #include "rosbag/query.h"
+#include "eigen_conversions/eigen_msg.h"
 #include <algorithm>
 #include <fstream>
 #include <rosbag/bag.h>
 #include <rosbag/view.h>
 #include <string>
-#include <geometry_msgs/TransformStamped.h>
 #include <ros/ros.h>
 #include <boost/foreach.hpp>
-#include <tf/tfMessage.h>
 #include <utility>
 #include <vector>
-#include <std_msgs/Bool.h>
 
 #define foreach BOOST_FOREACH
 
 using namespace std;
+
+void calculateDelta(const Eigen::Isometry3d& gt, const Eigen::Isometry3d& slam, Eigen::Isometry3d& delta){
+    delta = gt * slam.inverse();
+}
 
 int main(int argc, char** argv){
     
@@ -70,6 +76,7 @@ int main(int argc, char** argv){
 
     // ROS_INFO_STREAM("ROS bag time: " << (bag_end_time - bag_begin_time).toSec());
 
+    // 1. read tf messages in bag files
     vector<string> topics;
     topics.push_back(string("/tf"));  // must have '/'
     topics.push_back(string("/tf_static"));
@@ -77,45 +84,86 @@ int main(int argc, char** argv){
     rosbag::View view(bag, rosbag::TopicQuery(topics));
 
     string frame_id, child_frame_id;
-    geometry_msgs::Vector3 translation;
+    geometry_msgs::Transform transform;
     double time = 0;
-    vector<pair<double, geometry_msgs::Vector3> > trajectory;
-    vector<double> timestamp;
-    int count = 0;
-    foreach(rosbag::MessageInstance const m, view){
+    vector<pair<double, geometry_msgs::Transform> > trajectory_gt;
+    vector<pair<double, geometry_msgs::Transform> > trajectory_slam;
+    nav_msgs::Path global_path;  // for global path in lio-sam 
+    for(rosbag::MessageInstance const m : view){
         tf::tfMessage::ConstPtr tfPtr = m.instantiate<tf::tfMessage>();
         if(tfPtr != NULL){
             // only one transformstamed in tf::message
-            foreach(geometry_msgs::TransformStamped const geo, tfPtr->transforms) {
+            for(geometry_msgs::TransformStamped const geo : tfPtr->transforms) {
                 // some frame_ids have '/' 
                 child_frame_id = geo.child_frame_id;
                 frame_id = geo.header.frame_id;
                 time = geo.header.stamp.toSec();
-                translation = geo.transform.translation; 
+                transform = geo.transform; 
+                // ROS_INFO_STREAM(geo.header.stamp.sec << '\t' << geo.header.stamp.nsec << '\t' << setprecision(8) << geo.header.stamp.toSec());
                 // 'translation' can output directly
                 // ROS_INFO_STREAM(frame_id << '\t' << child_frame_id << '\t' << translation); 
 
-                if (frame_id == "/camera_init" and child_frame_id == "/for_evo_metric") {
-                    timestamp.push_back(time);
-                }
+                // if (frame_id == "odom" and child_frame_id == "base_link") {
+                //     trajectory_slam.push_back(make_pair(time, transform));
+                // }
                 if (frame_id == "map" and child_frame_id == "base_link_gt") {
-                    trajectory.push_back(make_pair(time, translation));
+                    trajectory_gt.push_back(make_pair(time, transform));
                 }
             }
         }
+        nav_msgs::PathConstPtr navPtr = m.instantiate<nav_msgs::Path>();
+        if(navPtr != nullptr){
+            global_path = *navPtr;  // only keep the last message
+        }
     }
-
     bag.close();
     ROS_INFO_STREAM("bag closed");
+    geometry_msgs::Transform temp;
+    for(auto pose : global_path.poses){
+        temp.translation.x = pose.pose.position.x;
+        temp.translation.y = pose.pose.position.y;
+        temp.translation.z = pose.pose.position.z;
+        temp.rotation = pose.pose.orientation;
+        trajectory_slam.push_back(make_pair(pose.header.stamp.toSec(), temp));
+    }
 
-    for(auto data : trajectory){
-        outFile_gt << data.first << '\t' << data.second.x << '\t' << data.second.y << '\t' << data.second.z << endl;
+    // 2. get delta transform between gt and slam frames
+    double first_slam_time = trajectory_slam[0].first;
+    geometry_msgs::Transform first_transform_slam = trajectory_slam[0].second;
+    geometry_msgs::Transform corresponding_transform_gt;
+
+    const double epsilon = 5e-3;
+    for(auto& data : trajectory_gt){
+        if(fabs(data.first - first_slam_time) < epsilon){
+            corresponding_transform_gt = data.second;
+            break;
+        }
+        if(data.first > first_slam_time){
+            ROS_ERROR_STREAM("Cannot find corresponding pose in gt frame!");
+            return -1;
+        }
+    }
+    Eigen::Isometry3d gt, slam, delta;
+    tf::transformMsgToEigen(corresponding_transform_gt, gt);
+    tf::transformMsgToEigen(first_transform_slam, slam);
+    calculateDelta(gt, slam, delta);
+
+    // 3. save data in TUM format
+    for(auto& data : trajectory_gt){
+        outFile_gt << setprecision(8) << data.first << ' ' << data.second.translation.x << ' ' << data.second.translation.y << ' ' << data.second.translation.z <<
+                                    ' ' << data.second.rotation.x << ' ' << data.second.rotation.y << ' ' << data.second.rotation.z << ' ' << data.second.rotation.w << endl;
     }
     outFile_gt.close();
     ROS_INFO_STREAM("outFile_gt closed");
 
-    for(auto data : timestamp){
-        outFile_aftmapped << data << endl;
+    Eigen::Isometry3d output;
+    for(auto& data : trajectory_slam){
+        // convert coordinates in slam frame to gt frame
+        tf::transformMsgToEigen(data.second, output);
+        output = delta * output;
+        tf::transformEigenToMsg(output, data.second);
+        outFile_aftmapped << setprecision(8) << data.first << ' ' << data.second.translation.x << ' ' << data.second.translation.y << ' ' << data.second.translation.z <<
+                            ' ' << data.second.rotation.x << ' ' << data.second.rotation.y << ' ' << data.second.rotation.z << ' ' << data.second.rotation.w << endl;
     }
     outFile_aftmapped.close();
     ROS_INFO_STREAM("outFile_aftmapped closed");

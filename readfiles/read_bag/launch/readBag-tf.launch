@@ -1,12 +1,12 @@
 <launch>
-    <param name="bag_file_name" type="string" value="/mnt/hgfs/lab-ubuntu/Experiment/carla0.9.11-yuquan-notrees/mapping-tf.bag" />
-    <param name="pcd_file_name" type="string" value="/mnt/hgfs/lab-ubuntu/Experiment/carla0.9.11-yuquan-notrees/map/trajectory.pcd" />
+    <param name="bag_file_name" type="string" value="/home/mrk/Experiment/town02-0407/tf/tf_for_evo-wolc.bag" />
 
-    <param name="csv_folder_name" type="string" value="/home/simulation/workspace/my_ws/src/readfiles/data/" />
+    <!-- must have / in the end  -->
+    <param name="csv_folder_name" type="string" value="/home/mrk/Experiment/town02-0407/tf/" />
 
     <node pkg="read_bag" type="readTF" name="readTF" output="screen" />
-    <node pkg="read_pcd" type="read_pcd" name="read_pcd" output="screen" />
-    <node pkg="read_pcd" type="dataToTUM" name="dataToTUM" output="screen" />
+    <!-- <node pkg="read_pcd" type="read_pcd" name="read_pcd" output="screen" />
+    <node pkg="read_pcd" type="dataToTUM" name="dataToTUM" output="screen" /> -->
 
     <!-- <node pkg="read_bag" type="readPointCloud" name="readPointCloud" output="screen" /> -->
 
