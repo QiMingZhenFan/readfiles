@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.0.2)
 project(functionTest)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+add_compile_options(-std=c++11)
+SET(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-std=c++11 -pthread")
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -16,8 +17,10 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
+set(GeographicLib_DIR /home/mrk/devel_lib_needed/GeographicLib-2.0/build)
 find_package(PCL REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(GeographicLib REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -124,6 +127,7 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
   ${Eigen3_INCLUDE_DIRS}
+  ${GeographicLib_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -140,6 +144,8 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(icp_test src/icp_test.cpp)
+add_executable(traj_eval src/traj_eval.cpp)
+add_executable(gps_lla2local src/gps_lla2local.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -157,7 +163,15 @@ target_link_libraries(icp_test
   ${PCL_LIBRARIES}
   ${Eigen3_LIBRARIES}
 )
-
+target_link_libraries(traj_eval
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
+  ${Eigen3_LIBRARIES}
+)
+target_link_libraries(gps_lla2local
+  ${catkin_LIBRARIES}
+  ${GeographicLib_LIBRARIES}
+)
 #############
 ## Install ##
 #############

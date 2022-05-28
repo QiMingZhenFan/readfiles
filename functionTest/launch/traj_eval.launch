@@ -1,0 +1,10 @@
+<launch>
+    <param name="version"       type="string" value="1" />
+    <param name="gt_topic"      type="string" value="/ndt/current_pose_fake" />
+    <param name="traj_topic"    type="string" value="/lio_sam/mapping/odometry" />
+    <param name="traj_topic"    type="string" value="/odometry/gps" />
+    <param name="folder_name"   type="string" value="1" />
+
+    <node pkg="functionTest" type="traj_eval" name="traj_eval" output="screen" />
+
+</launch>

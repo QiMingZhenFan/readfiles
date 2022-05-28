@@ -1,8 +1,16 @@
 <launch>
-    <param name="bag_file_name" type="string" value="/home/mrk/Experiment/town02-0407/tf/tf_for_evo-wolc.bag" />
+
+    <param name="workingfolder" type="string" value="/home/mrk/Experiment/yunle/" />
+
+    <!-- <param name="bag_file_name" type="string" value="/home/mrk/Experiment/town02-0407/tf/tf_for_evo-oneloop.bag" /> -->
+    <param name="bag_file_name" type="string" value="tf_for_evo_lio_sam_mid.bag" />
 
     <!-- must have / in the end  -->
-    <param name="csv_folder_name" type="string" value="/home/mrk/Experiment/town02-0407/tf/" />
+    <param name="csv_folder_name" type="string" value="evo" />
+
+    <param name="ifchangePCD" type="bool" value="false" />
+    <param name="pcd_file_name" type="string" value="GlobalMap.pcd" />
+
 
     <node pkg="read_bag" type="readTF" name="readTF" output="screen" />
     <!-- <node pkg="read_pcd" type="read_pcd" name="read_pcd" output="screen" />

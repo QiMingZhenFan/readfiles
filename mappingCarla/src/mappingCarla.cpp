@@ -13,7 +13,7 @@
 
 #include <thread>
 
-
+// 使用carla真值位姿对激光雷达帧进行拼接获取地图
 using namespace std;
 string lidar_topic = "/carla/lidar1/point_cloud";
 string pose_topic = "/ndt/current_pose";
