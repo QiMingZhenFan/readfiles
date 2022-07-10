@@ -4,6 +4,7 @@ project(functionTest)
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++11)
 SET(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-std=c++11 -pthread")
+SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "/usr/share/cmake/geographiclib")
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -17,7 +18,6 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
-set(GeographicLib_DIR /home/mrk/devel_lib_needed/GeographicLib-2.0/build)
 find_package(PCL REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(GeographicLib REQUIRED)
