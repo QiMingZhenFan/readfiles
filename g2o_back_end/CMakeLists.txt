@@ -2,7 +2,10 @@ cmake_minimum_required(VERSION 3.0.2)
 project(g2o_back_end)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+# add_compile_options(-std=c++17)
+# set( CMAKE_CXX_FLAGS "-std=c++14 -O3" )
+set(CMAKE_CXX_STANDARD 17) 
+list( APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake ) 
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -13,7 +16,21 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
   tf
+  rosbag
 )
+find_package(PCL REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(G2O REQUIRED)
+# in case G2O libraries are built into shared, so you should manually find Ceres
+# actually, cannot link to glog in linking
+find_package(Ceres REQUIRED)
+message(STATUS "Eigen3:" ${Eigen3_FOUND} ${EIGEN3_INCLUDE_DIRS} ${EIGEN3_LIBRARIES})
+message(STATUS "g2o:" ${G2O_FOUND} ${G2O_INCLUDE_DIRS} ${G2O_LIBRARIES})
+
+if(G2O_FOUND)
+    include_directories(${G2O_INCLUDE_DIR})
+    message(STATUS "G2O lib is found:" ${G2O_INCLUDE_DIR})
+endif(G2O_FOUND)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -118,8 +135,11 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-# include
+  include
   ${catkin_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
+  ${CERES_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -135,7 +155,8 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(${PROJECT_NAME}_node src/back_end.cpp)
+add_executable(${PROJECT_NAME}_node src/back_end.cpp
+                                                                                          src/back_end_node.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -148,8 +169,22 @@ add_executable(${PROJECT_NAME}_node src/back_end.cpp)
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
+set(G2O_LIBS g2o_core
+                              g2o_stuff
+                              g2o_cli
+                              g2o_types_data
+                              g2o_types_slam3d
+                              g2o_solver_eigen
+                              g2o_solver_dense
+                              g2o_solver_csparse
+                              g2o_solver_cholmod)
+
 target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+  ${CERES_LIBRARIES}
+  ${G2O_LIBS}
 )
 
 #############
