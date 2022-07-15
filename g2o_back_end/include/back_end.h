@@ -56,6 +56,10 @@
 #include "rosbag/bag.h"
 #include "rosbag/view.h"
 #include "tf/transform_datatypes.h"
+ #include "geographic_msgs/GeoPoint.h"
+ #include <geographic_msgs/GeoPose.h>
+ #include <geodesy/wgs84.h>
+ #include <geodesy/utm.h>
 
 namespace Eigen {
 using Matrix6d = ::Eigen::Matrix<double, 6, 6>;
@@ -91,6 +95,8 @@ struct Node{
     pcl::PointCloud<PointType> cloud;
     struct Pose pose, gnss_pose;
     Eigen::Matrix6d gnss_information;
+    Node() {};
+    Node(int id, ros::Time time):index(id), time_stamp(time) {};
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
@@ -126,10 +132,18 @@ class BackEnd{
     void PairMatching(const int node1_id, const int node2_id);
     void AddConstraintToGraph();
     void AddPair(const int node1_id, const int node2_id);
-   
+    void Run();
+
     private:
     int lidar_frame_nums_;
     int node_nums_; // should equal to lidar frames, if no key frame selected strategy
+    bool param_use_robust_kernel_;
+    bool param_use_gnss_;
+    const std::string param_bag_full_path_;
+    const std::string param_lidar_topic_;
+    const std::string param_pose_topic_;
+    const std::string param_gnss_topic_;
+
     std::unordered_map<int, Node> nodes;
     // node1, node2, transform_between
     std::unordered_map<int, std::unordered_map<int, Constraint>> constraints;
@@ -145,17 +159,10 @@ class BackEnd{
     std::unordered_map<int, g2o::VertexSE3*> vertices;
     std::vector<g2o::EdgeSE3*> edges;
     std::vector<g2o::EdgeSE3PriorXYZ*> edges_gnss;
-    std::vector<bool> node_if_constrainted;
+    // std::vector<int> node_if_constrainted;
     g2o::SparseOptimizer optimizer;
     std::unique_ptr<g2o::BlockSolver_6_3::LinearSolverType> linearSolver;
     g2o::OptimizationAlgorithmLevenberg* solver;
-
-    bool param_use_robust_kernel_;
-    bool param_use_gnss_;
-    const std::string param_bag_full_path_;
-    const std::string param_lidar_topic_;
-    const std::string param_pose_topic_;
-    const std::string param_gnss_topic_;
 };
 
 } // namespace back_end

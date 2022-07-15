@@ -26,6 +26,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
 	ros-${ROS_DISTRO}-pcl-conversions \
 	ros-${ROS_DISTRO}-pcl-ros \
 	ros-${ROS_DISTRO}-eigen-conversions \
+	ros-${ROS_DISTRO}-geographic-msgs \
+	ros-${ROS_DISTRO}-geodesy \
 	software-properties-common \
 	libyaml-cpp-dev \
 #	libopencv-dev \
