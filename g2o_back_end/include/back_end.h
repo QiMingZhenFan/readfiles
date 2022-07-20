@@ -64,6 +64,7 @@
 namespace Eigen {
 using Matrix6d = ::Eigen::Matrix<double, 6, 6>;
 using Vector6d = ::Eigen::Matrix<double, 6, 1>;
+using Vector7d = ::Eigen::Matrix<double, 7, 1>;
 inline Eigen::Matrix3d Skew(const Eigen::Vector3d& x) {
   // return x.cross(Eigen::Matrix3d::Identity());
   Eigen::Matrix3d x_hat;
@@ -92,11 +93,15 @@ struct Pose
 struct Node{
     int index;
     ros::Time time_stamp;
-    pcl::PointCloud<PointType> cloud;
-    struct Pose pose, gnss_pose;
+    pcl::PointCloud<PointType>::Ptr cloud;
+    struct Pose pose, gnss_pose, opt_pose;
     Eigen::Matrix6d gnss_information;
-    Node() {};
-    Node(int id, ros::Time time):index(id), time_stamp(time) {};
+    Node() {
+        cloud.reset(new pcl::PointCloud<PointType>());
+    };
+    Node(int id, ros::Time time):index(id), time_stamp(time) {
+        cloud.reset(new pcl::PointCloud<PointType>());
+    };
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
@@ -128,10 +133,10 @@ class BackEnd{
                                                     std::vector<sensor_msgs::NavSatFix>& gnss,
                                                     std::vector<geometry_msgs::PoseStamped>& odometry_poses);
     void CollectData(); 
+    bool AddPair(const int node1_id, const int node2_id);
     void DividePairs();
     void PairMatching(const int node1_id, const int node2_id);
     void AddConstraintToGraph();
-    void AddPair(const int node1_id, const int node2_id);
     void Run();
 
     private:
@@ -143,11 +148,12 @@ class BackEnd{
     const std::string param_lidar_topic_;
     const std::string param_pose_topic_;
     const std::string param_gnss_topic_;
+    std::string param_output_file_path;
 
     std::unordered_map<int, Node> nodes;
+    std::unordered_map<int, std::unordered_set<int>> pairs;
     // node1, node2, transform_between
     std::unordered_map<int, std::unordered_map<int, Constraint>> constraints;
-    std::unordered_map<int, std::unordered_set<int>> pairs;
     // for radius search, intensity used to store node index
     pcl::PointCloud<pcl::PointXYZI>::Ptr pose_cloud;
     pcl::search::KdTree<pcl::PointXYZI> kdtree;

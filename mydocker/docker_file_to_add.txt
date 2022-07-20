@@ -1,8 +1,16 @@
+g2o要求cmake>3.14
 pip cmake=3.16.6 --no-cache-dir
+
+解决kdtree相关问题
 sudo mv /usr/include/flann/ext/lz4.h /usr/include/flann/ext/lz4.h.bak
 sudo mv /usr/include/flann/ext/lz4hc.h /usr/include/flann/ext/lz4.h.bak
-
 sudo ln -s /usr/include/lz4.h /usr/include/flann/ext/lz4.h
 sudo ln -s /usr/include/lz4hc.h /usr/include/flann/ext/lz4hc.h
 
-install g2o
+install g2o，但是需要注意不要用g2o自带的ceres，会引起用户代码的冲突
+git clone **********
+
+# 运行时链接问题
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+# or cmake安装时定义安装prefix
+

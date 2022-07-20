@@ -109,8 +109,8 @@ find_package(Eigen3 REQUIRED)
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES read_pcd
-  CATKIN_DEPENDS rosbag roscpp std_msgs tf
-  DEPENDS PCL Eigen3
+  # CATKIN_DEPENDS rosbag roscpp std_msgs tf
+  # DEPENDS PCL Eigen3
 )
 
 ###########

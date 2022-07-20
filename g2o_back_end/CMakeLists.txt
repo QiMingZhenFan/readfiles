@@ -3,9 +3,10 @@ project(g2o_back_end)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++17)
-# set( CMAKE_CXX_FLAGS "-std=c++14 -O3" )
+set( CMAKE_CXX_FLAGS " -O3" )
 set(CMAKE_CXX_STANDARD 17) 
 list( APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake ) 
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -35,6 +36,21 @@ if(G2O_FOUND)
     message(STATUS "G2O lib is found:" ${G2O_INCLUDE_DIR})
 endif(G2O_FOUND)
 
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+  message(STATUS "OpenMP found: " ${OpenMP_CXX_VERSION})
+  message ( STATUS "OpenMP_FOUND    = ${OpenMP_FOUND}" )
+  message ( STATUS "OpenMP_CXX_FOUND  = ${OpenMP_CXX_FOUND}" )
+  message ( STATUS "OpenMP_CXX_FLAGS  = ${OpenMP_CXX_FLAGS}" )
+  message ( STATUS "OpenMP_CXX_INCLUDE_DIRS  = ${OpenMP_CXX_INCLUDE_DIRS}" )
+  message ( STATUS "OpenMP_CXX_LIB_NAMES  = ${OpenMP_CXX_LIB_NAMES}" )
+  message ( STATUS "OpenMP_CXX_LIBRARIES  = ${OpenMP_CXX_LIBRARIES}" )
+  message ( STATUS "OpenMP_LIBRARY  = ${OpenMP_LIBRARY}" )
+  message ( STATUS "OpenMP_CXX_SPEC_DATE  = ${OpenMP_CXX_SPEC_DATE}" )
+  message ( STATUS "OpenMP_CXX_VERSION_MAJOR  = ${OpenMP_CXX_VERSION_MAJOR}" )
+  message ( STATUS "OpenMP_CXX_VERSION_MINOR  = ${OpenMP_CXX_VERSION_MINOR}" )
+  message ( STATUS "OpenMP_CXX_VERSION  = ${OpenMP_CXX_VERSION}" )
+endif()
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
@@ -188,6 +204,7 @@ target_link_libraries(${PROJECT_NAME}_node
   ${EIGEN3_LIBRARIES}
   ${CERES_LIBRARIES}
   ${G2O_LIBS}
+  OpenMP::OpenMP_CXX
 )
 
 #############

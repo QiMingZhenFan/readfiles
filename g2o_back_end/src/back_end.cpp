@@ -1,9 +1,15 @@
 #include "back_end.h"
+
+#include "pcl/filters/voxel_grid.h"
+
+#ifdef _OPENMP 
+#include<omp.h>
+#endif
 namespace back_end{
 
 const int kMaxIteration = 10;
 const float kPairSelectRadius = 20.0; // m
-const int kSubmapRadius = 5; // frame
+const int kSubmapRadius = 5; // frame index
 const double kGnssStdDev = 0.1; 
 namespace{
 double distance(geometry_msgs::Point& pos1, geometry_msgs::Point& pos2){
@@ -65,20 +71,60 @@ void InterpolateTargetPose(geometry_msgs::PoseStamped& target,
     target.pose.orientation.z = qres.z();
 }
 
+void WritePoseToFile(const std::string& file_path_name, const std::unordered_map<int, Node>& nodes){
+    // in TUM format
+    std::ofstream outFile(file_path_name, std::ios::out);
+    if(!outFile){
+        ROS_ERROR_STREAM("Cannot write file : " << file_path_name);
+        return;
+    }
+    for(int i = 0; i <nodes.size(); ++i){
+        auto& node = nodes.at(i);
+        outFile << node.time_stamp.toSec()
+                        << ' ' << node.opt_pose.position.x()
+                        << ' ' << node.opt_pose.position.y()
+                        << ' ' << node.opt_pose.position.z()
+                        << ' ' << node.opt_pose.rotation.x()
+                        << ' ' << node.opt_pose.rotation.y()
+                        << ' ' << node.opt_pose.rotation.z()
+                        << ' ' << node.opt_pose.rotation.w()
+                        << std::endl;
+    }
+    outFile.close();
 }
+
+} // namespace
+
 
 void BackEnd::Init(){
     param_use_robust_kernel_ = true;
     param_use_gnss_ = false;
     lidar_frame_nums_ = 0;
     node_nums_ = 0;
+    param_output_file_path = "/tmp/opt_pose.csv";
+
+    // check if topic is empty
+    if(param_gnss_topic_.empty() || param_pose_topic_.empty() || param_lidar_topic_.empty()){
+        ROS_ERROR_STREAM("topic name is empty, please set topic name first!");
+        ros::shutdown();
+    }
+    
+    // set omp threads
+    int thread = 1;
+    int total_threads = thread;
+#ifdef _OPENMP 
+    total_threads = omp_get_max_threads();
+    thread = total_threads > 2? total_threads - 1: total_threads;
+    omp_set_num_threads(thread);
+#endif
+    ROS_INFO_STREAM("Total threads: " << total_threads << ", use threads: " << thread << ".");
 
     // for quick push
     point_clouds_.reserve(1000);
     gnss_.reserve(1000);
     odometry_poses_.reserve(1000);
 
-    pose_cloud = pcl::PointCloud<pcl::PointXYZI>().makeShared();
+    pose_cloud.reset(new pcl::PointCloud<pcl::PointXYZI>());
 
     optimizer.setVerbose(false);
     // linearSolver = g2o::make_unique<
@@ -105,6 +151,7 @@ void BackEnd::ReadDataFromBag(std::vector<sensor_msgs::PointCloud2>& point_cloud
     topics.push_back(param_gnss_topic_);
 
     rosbag::View view(bag, rosbag::TopicQuery(topics));
+    // rosbag::View view(bag, rosbag::TopicQuery(topics),ros::Time(1657809600), ros::Time(1657809650));
 
     ros::Time bag_begin_time = view.getBeginTime();
     ros::Time bag_end_time = view.getEndTime();
@@ -122,10 +169,19 @@ void BackEnd::ReadDataFromBag(std::vector<sensor_msgs::PointCloud2>& point_cloud
         if (m.getTopic() == param_pose_topic_ || ("/" + m.getTopic() == param_pose_topic_))
         {
             // TODO: determine which kind of message to use here
-            geometry_msgs::PoseStamped::Ptr message = m.instantiate<geometry_msgs::PoseStamped>();
-            if (message != NULL){
-            odometry_poses.emplace_back(*message);
-          }
+            geometry_msgs::PoseStamped::Ptr message0 = m.instantiate<geometry_msgs::PoseStamped>();
+            if (message0 != NULL){
+                odometry_poses.emplace_back(*message0);
+                continue;
+            }
+            nav_msgs::Odometry::Ptr message1 = m.instantiate<nav_msgs::Odometry>();
+            if (message1 != NULL){
+                odometry_poses.emplace_back();
+                auto& cur_posestamped = odometry_poses.back();
+                cur_posestamped.header = message1->header;
+                cur_posestamped.pose = message1->pose.pose;
+                continue;
+            }
         }
         if (m.getTopic() == param_gnss_topic_ || ("/" + m.getTopic() == param_gnss_topic_))
         {
@@ -187,17 +243,24 @@ void BackEnd::CollectData(){
         ROS_ERROR("set use gnss but no gnss data!");
         ros::shutdown();
     }
+    ROS_INFO_STREAM("Origin vector size, point_clouds: " << point_clouds_.size()
+                                            << ", gnss: " << gnss_.size() 
+                                            << ", odometry: " << odometry_poses_.size());
+
     AlignTimeStamp(point_clouds_, gnss_, odometry_poses_);
     ROS_INFO_STREAM("Vector size after timestamp alignment, point_clouds: " << point_clouds_.size()
                                                 << ", gnss: " << gnss_.size() 
                                                 << ", odometry: " << odometry_poses_.size());
-    assert(point_clouds_.size() == gnss_.size() && point_clouds_.size() == odometry_poses_.size());    
+    if(param_use_gnss_)
+        assert(point_clouds_.size() == gnss_.size() && point_clouds_.size() == odometry_poses_.size());    
+    else
+        assert(point_clouds_.size() ==  odometry_poses_.size());    
 
     auto ConstructSubmap = [this](int left, int mid, int right, Node& node){
         left = left < 0? 0: left;
         right = right > point_clouds_.size()-1? point_clouds_.size()-1: right;
         Eigen::Transform<double,3,Eigen::Isometry>  trans_mid = node.pose.position * node.pose.rotation;
-        pcl::fromROSMsg(point_clouds_[mid], node.cloud);
+        pcl::fromROSMsg(point_clouds_[mid], *node.cloud);
         for(int i = left; i <= right; ++i){
             if(i == mid){
                 continue;
@@ -208,7 +271,7 @@ void BackEnd::CollectData(){
                 pcl::PointCloud<PointType> point_cloud_cur;
                 pcl::fromROSMsg(point_clouds_[i], point_cloud_cur);
                 pcl::transformPointCloud(point_cloud_cur, point_cloud_cur, trans_mid_cur.matrix().cast<float>());
-                node.cloud += point_cloud_cur;
+                *node.cloud += point_cloud_cur;
             }
         }
     };
@@ -230,14 +293,23 @@ void BackEnd::CollectData(){
                                                                                                                odometry_poses_[i].pose.orientation.z);
             // 3. fill gnss pose and information
             // change gps readings in wsg84 to utm
-            geographic_msgs::GeoPoint geo_point = geodesy::toMsg(gnss_[i]);
-            geodesy::UTMPoint utm;
-            geodesy::fromMsg(geo_point, utm);
-            temp_node.gnss_pose.position.translation() << utm.easting, utm.northing, utm.altitude;
-            temp_node.gnss_information = Eigen::Matrix6d::Identity() * (1 / kGnssStdDev);
+            if(param_use_gnss_){
+                geographic_msgs::GeoPoint geo_point = geodesy::toMsg(gnss_[i]);
+                geodesy::UTMPoint utm;
+                geodesy::fromMsg(geo_point, utm);
+                temp_node.gnss_pose.position.translation() << utm.easting, utm.northing, utm.altitude;
+                temp_node.gnss_information = Eigen::Matrix6d::Identity() * (1 / kGnssStdDev);
+            }
 
             // 4. fill cloud
             ConstructSubmap(i - kSubmapRadius, i, i + kSubmapRadius, temp_node);
+            pcl::PointCloud<PointType>::Ptr cloud_filtered(new pcl::PointCloud<PointType>());
+            double voxel_leaf_size = 0.2;
+            pcl::VoxelGrid<PointType> voxel;
+            voxel.setInputCloud(temp_node.cloud);
+            voxel.setLeafSize(voxel_leaf_size, voxel_leaf_size, voxel_leaf_size);
+            voxel.filter(*cloud_filtered);
+            temp_node.cloud = cloud_filtered;
 
             // 5. put node pose into pose_cloud for kdTree find KNN
             pcl::PointXYZI pose_point;
@@ -246,34 +318,37 @@ void BackEnd::CollectData(){
             pose_point.z = temp_node.pose.position.translation().z();
             pose_point.intensity = node_index;
             pose_cloud->push_back(pose_point);
+
+            ROS_INFO_STREAM("in constructing submap, node id: " << node_index  << ", submap points: " <<temp_node.cloud->size());
         }
     }
-
 
     // set node_nums_
     node_nums_ = nodes.size();
     lidar_frame_nums_ = point_clouds_.size();
 }
 
-void BackEnd::AddPair(const int node1_id, const int node2_id){
+bool BackEnd::AddPair(const int node1_id, const int node2_id){
     // must ensure front id < second id
     int less_id = std::min(node1_id, node2_id);
     int larger_id = std::max(node1_id, node2_id);
     if(less_id == larger_id){
-        ROS_ERROR_COND(less_id == larger_id, "pairs have same id !!");
-        return;
+        ROS_WARN_STREAM_COND(less_id == larger_id, "pairs have same id, id: " << less_id << "!");
+        return false;
     }
-    if(pairs.count(node1_id != 0) && pairs[node1_id].count(node2_id) != 0){
-        // pair already exist
-        return;
+    if(pairs.count(less_id) != 0 && pairs[less_id].count(larger_id) != 0){
+        ROS_WARN_STREAM( "pair already exist!");
+        return false;
     }
     pairs[less_id].insert(larger_id); 
     // TODO: make sure every node was constrainted
     // node_if_constrainted[less_id] = true;
     // node_if_constrainted[larger_id] = true;
+    return true;
 }
 
 void BackEnd::DividePairs(){
+    int pair_nums = 0;
     kdtree.setInputCloud(pose_cloud);
     // TODO: this part can be parallel
     for(const auto& point : pose_cloud->points){
@@ -281,36 +356,44 @@ void BackEnd::DividePairs(){
         std::vector<float> pointSquaredDistance;
         if (kdtree.radiusSearch(point, kPairSelectRadius, pointIdxSearch, pointSquaredDistance) > 0){
             for(const auto& id : pointIdxSearch){
-                AddPair(point.intensity, pose_cloud->points[id].intensity);
+                if(AddPair(point.intensity, pose_cloud->points[id].intensity)){
+                    ++pair_nums;
+                }
             }
         }
     } 
     // TODO: check all node have interframe constraint before matching
-
+    ROS_INFO_STREAM("total pairs: " << pair_nums);
 }
 
 
 void BackEnd::PairMatching(const int node1_id, const int node2_id){
     if(constraints.count(node1_id) != 0 && constraints[node1_id].count(node2_id) != 0){
+        ROS_WARN("pair already matched!");
         return;
     }
     // for now, it's scan-to-scan matching
-    Node& node1 = nodes[node1_id];
-    Node& node2 = nodes[node2_id];
+    const Node& node1 = nodes[node1_id];
+    const Node& node2 = nodes[node2_id];
     // makeShared() is a deep copy
-    pcl::PointCloud<PointType>::Ptr tar_cloud = node1.cloud.makeShared();
-    pcl::PointCloud<PointType>::Ptr src_cloud = node2.cloud.makeShared();
+    pcl::PointCloud<PointType>::ConstPtr tar_cloud = node1.cloud;
+    pcl::PointCloud<PointType>::ConstPtr src_cloud = node2.cloud;
     pcl::PointCloud<PointType> aligned_cloud;
 
+    // ROS_INFO_STREAM("calculate delta transformation.");
     Eigen::Transform<double,3,Eigen::Isometry>  trans1 = node1.pose.position * node1.pose.rotation;
     Eigen::Transform<double,3,Eigen::Isometry>  trans2 = node2.pose.position * node2.pose.rotation;
     Eigen::Transform<double,3,Eigen::Isometry>  delta_trans = trans1.inverse() * trans2;
 
-    pcl::GeneralizedIterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> gicp;
+    // ros::WallTime bef = ros::WallTime::now();
+    // ROS_INFO_STREAM("start icp matching.");
+    pcl::GeneralizedIterativeClosestPoint<PointType, PointType> gicp;
     gicp.setInputSource(src_cloud);
     gicp.setInputTarget(tar_cloud);
     gicp.setMaximumIterations(kMaxIteration);
     gicp.align(aligned_cloud, delta_trans.matrix().cast<float>());
+    // ros::WallTime aft = ros::WallTime::now();
+    // ROS_INFO_STREAM("icp consume time:" <<  (aft - bef).toSec() << ".");
 
     // TODO: add more metrics to judge the outcome
     // add constarints here
@@ -320,8 +403,12 @@ void BackEnd::PairMatching(const int node1_id, const int node2_id){
         temp.node1_id = node1.index;
         temp.node2_id = node2.index;
         temp.fitness_score = gicp.getFitnessScore();
+        # pragma omp critical
         constraints[node1.index][node2.index] = temp;
+        ROS_INFO_STREAM("pair accepted: " << node1.index << " <---> " << node2.index << ".");
+        return;
     }
+    ROS_WARN_STREAM("reject this pair: " << node1.index << " <---> " << node2.index << ".");
 }
 
 void BackEnd::AddConstraintToGraph(){
@@ -393,6 +480,7 @@ void BackEnd::AddConstraintToGraph(){
 }
 
 void BackEnd::Run(){
+    ros::WallTime bef(ros::WallTime::now());
     Init();
     ROS_INFO("**************  collect data  **************");
     CollectData();
@@ -401,9 +489,23 @@ void BackEnd::Run(){
     DividePairs();
 
     ROS_INFO("**************  perform pair matching  **************");
+    // hack, for omp parallel
+    std::vector<std::pair<int, int>> pairs_vec;
     for (auto& [id1, id2s] : pairs) {
         for(auto& id2:id2s){
-            PairMatching(id1, id2);
+            pairs_vec.emplace_back(std::make_pair(id1, id2));
+        }
+    }
+    int pair_calculated_num = 0;
+    # pragma omp parallel for
+    for(int i = 0; i < pairs_vec.size(); ++i){
+        int id1 = pairs_vec[i].first;
+        int id2 = pairs_vec[i].second;
+        PairMatching(id1, id2);
+        # pragma omp critical
+        {
+            pair_calculated_num++;
+            ROS_INFO("pair calculated num: %d/%ld.", pair_calculated_num, pairs_vec.size());
         }
     }
 
@@ -411,8 +513,23 @@ void BackEnd::Run(){
     AddConstraintToGraph();
 
     ROS_INFO("**************  start optimization  **************");
+    optimizer.setVerbose(true);
     optimizer.initializeOptimization();
-    optimizer.optimize(10);
+    optimizer.optimize(50);
+    
+    ROS_INFO("**************  finish optimization  **************");
+    // write optimized pose into Node struct
+    for(auto& [id, node] : nodes){
+        double xyzqxyzw[7];
+        vertices[id]->getEstimateData(xyzqxyzw);
+        node.opt_pose.position.translation() << xyzqxyzw[0], xyzqxyzw[1], xyzqxyzw[2];
+        node.opt_pose.rotation = Eigen::Quaterniond(xyzqxyzw[6], xyzqxyzw[3], xyzqxyzw[4], xyzqxyzw[5]);
+    }
 
+    ROS_INFO("**************  write data  **************");
+    ROS_INFO_STREAM("write data to: " << param_output_file_path);
+    WritePoseToFile(param_output_file_path, nodes);
+    ros::WallTime aft(ros::WallTime::now());
+    ROS_INFO_STREAM("total time consuming: " << (aft - bef).toSec() << "s.");
 }
 } // namespace back_end

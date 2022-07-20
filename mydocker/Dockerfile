@@ -1,4 +1,6 @@
-FROM ros:melodic
+# FROM ros:melodic
+# use command below so you can use rviz
+FROM osrf/ros:melodic-desktop-full
 
 ENV HOME /root
 ENV CERES_VERSION="2.1.0"
