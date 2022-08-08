@@ -21,6 +21,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
 	wget \
 	unzip \
 	libboost-all-dev \ 
+	apt-utils \
 	ros-${ROS_DISTRO}-cv-bridge \
 	ros-${ROS_DISTRO}-image-transport \
 	ros-${ROS_DISTRO}-message-filters \
@@ -39,6 +40,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get autoremove \
   && DEBIAN_FRONTEND=noninteractive rm -rf /var/lib/apt/lists/*
 
+# install ceres
 RUN if [ "x$(nproc)" = "x1" ] ; then export USE_PROC=1 ; else export USE_PROC=$(($(nproc)/2)) ; fi \
   && mkdir -p /libdir \
   && cd /libdir \
@@ -52,7 +54,7 @@ RUN if [ "x$(nproc)" = "x1" ] ; then export USE_PROC=1 ; else export USE_PROC=$(
   && cd / \
   && rm -r /libdir
 
-
+# install gtsam
 RUN DEBIAN_FRONTEND=noninteractive add-apt-repository ppa:borglab/gtsam-release-4.0 \
   && DEBIAN_FRONTEND=noninteractive apt-get update \ 
   && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install libgtsam-dev libgtsam-unstable-dev \
@@ -78,9 +80,11 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get autoclean \
   && DEBIAN_FRONTEND=noninteractive apt-get autoremove \
   && DEBIAN_FRONTEND=noninteractive rm -rf /var/lib/apt/lists/* \
-  && pip install apscheduler -i https://pypi.tuna.tsinghua.edu.cn/simple \
-  && pip install flask -i https://pypi.tuna.tsinghua.edu.cn/simple \
-  && pip install ConfigParser -i https://pypi.tuna.tsinghua.edu.cn/simple \
-  && pip install requests -i https://pypi.tuna.tsinghua.edu.cn/simple
+  && pip install apscheduler -i https://pypi.tuna.tsinghua.edu.cn/simple --no-cache-dir\
+  && pip install flask -i https://pypi.tuna.tsinghua.edu.cn/simple --no-cache-dir\
+  && pip install ConfigParser -i https://pypi.tuna.tsinghua.edu.cn/simple --no-cache-dir\
+  && pip install requests -i https://pypi.tuna.tsinghua.edu.cn/simple --no-cache-dir\
+  && pip install cmake==3.16.6 --no-cache-dir
+
 
 WORKDIR /
