@@ -28,7 +28,7 @@ int main(int argc, char** argv){
     // subOdom =  nh.subscribe<nav_msgs::Odometry>(odomTopic, 20, odomHandler);
     ROS_INFO("\033[1;32m----> Back End Optimization Started.\033[0m");
 
-    std::string bag_path = "/codes/lidar-gnss-odoe.bag";
+    std::string bag_path = "/code/lidar-gnss-odoe.bag";
     std::string lidar_topic = "/carla/ego_vehicle/lidar";
     std::string pose_topic = "/Odometry";
     std::string gnss_topic = "/carla/ego_vehicle/gnss";

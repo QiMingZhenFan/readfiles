@@ -497,7 +497,7 @@ void BackEnd::Run(){
         }
     }
     int pair_calculated_num = 0;
-    # pragma omp parallel for
+    # pragma omp parallel for schedule(dynamic)
     for(int i = 0; i < pairs_vec.size(); ++i){
         int id1 = pairs_vec[i].first;
         int id2 = pairs_vec[i].second;

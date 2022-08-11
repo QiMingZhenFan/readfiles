@@ -146,6 +146,8 @@ include_directories(
 add_executable(icp_test src/icp_test.cpp)
 add_executable(traj_eval src/traj_eval.cpp)
 add_executable(gps_lla2local src/gps_lla2local.cpp)
+add_executable(segmentation_test src/segmentation_test.cpp)
+add_executable(plane_cylinder_extract src/plane_cylinder_extract.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -171,6 +173,14 @@ target_link_libraries(traj_eval
 target_link_libraries(gps_lla2local
   ${catkin_LIBRARIES}
   ${GeographicLib_LIBRARIES}
+)
+target_link_libraries(segmentation_test
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
+)
+target_link_libraries(plane_cylinder_extract
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
 )
 #############
 ## Install ##
