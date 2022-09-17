@@ -2,10 +2,13 @@
 # use command below so you can use rviz
 FROM osrf/ros:melodic-desktop-full
 
+COPY sources.list /etc/apt/sources.list
+
 ENV HOME /root
 ENV CERES_VERSION="2.1.0"
 # ENV PCL_VERSION="1.8.0"
 # ENV CATKIN_WS=/root/catkin_ws
+
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
