@@ -8,7 +8,8 @@ sudo ln -s /usr/include/lz4.h /usr/include/flann/ext/lz4.h
 sudo ln -s /usr/include/lz4hc.h /usr/include/flann/ext/lz4hc.h
 
 install g2o，但是需要注意不要用g2o自带的ceres，会引起用户代码的冲突
-git clone **********
+git clone https://github.com/RainerKuemmerle/g2o.git
+cmake -DG2O_USE_VENDORED_CERES=OFF ..
 
 # 运行时链接问题
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
