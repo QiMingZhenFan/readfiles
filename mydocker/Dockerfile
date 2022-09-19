@@ -25,6 +25,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
 	unzip \
 	libboost-all-dev \ 
 	apt-utils \
+  curl \
 	ros-${ROS_DISTRO}-cv-bridge \
 	ros-${ROS_DISTRO}-image-transport \
 	ros-${ROS_DISTRO}-message-filters \
@@ -54,19 +55,6 @@ RUN if [ "x$(nproc)" = "x1" ] ; then export USE_PROC=1 ; else export USE_PROC=$(
   && make -j${USE_PROC} install \
   && cd .. \
   && rm -r ./ceres-solver \
-  && cd / \
-  && rm -r /libdir
-
-# install g2o
-RUN if [ "x$(nproc)" = "x1" ] ; then export USE_PROC=1 ; else export USE_PROC=$(($(nproc)/2)) ; fi \
-  && mkdir -p /libdir \
-  && cd /libdir \
-  && git clone https://github.com/RainerKuemmerle/g2o.git \
-  && cd ./g2o \
-  && cmake -DG2O_USE_VENDORED_CERES=OFF . \
-  && make -j${USE_PROC} install \
-  && cd .. \
-  && rm -r ./g2o \
   && cd / \
   && rm -r /libdir
 
@@ -102,11 +90,27 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
   && pip install requests -i https://pypi.tuna.tsinghua.edu.cn/simple --no-cache-dir\
   && pip install cmake==3.16.6 --no-cache-dir
 
+# install g2o  -- cmake 3.14 or higher required
+RUN if [ "x$(nproc)" = "x1" ] ; then export USE_PROC=1 ; else export USE_PROC=$(($(nproc)/2)) ; fi \
+  && mkdir -p /libdir \
+  && cd /libdir \
+  && git clone https://github.com/RainerKuemmerle/g2o.git \
+  && cd ./g2o \
+  && cmake -DG2O_USE_VENDORED_CERES=OFF . \
+  && make -j${USE_PROC} install \
+  && cd .. \
+  && rm -r ./g2o \
+  && cd / \
+  && rm -r /libdir
+
+
 # 解决kdtree相关问题
 RUN sudo mv /usr/include/flann/ext/lz4.h /usr/include/flann/ext/lz4.h.bak \
   && sudo mv /usr/include/flann/ext/lz4hc.h /usr/include/flann/ext/lz4.h.bak \
   && sudo ln -s /usr/include/lz4.h /usr/include/flann/ext/lz4.h \
   && sudo ln -s /usr/include/lz4hc.h /usr/include/flann/ext/lz4hc.h \
-  && export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+  && export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib \
+  && bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)"
+
 
 WORKDIR /

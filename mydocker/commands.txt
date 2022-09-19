@@ -6,4 +6,5 @@ docker run -it --name my_melodic --mount type=bind,source=/home/qcraft/mrk/ros_d
 docker exec -it my_melodic /bin/bash
 
 # Windows
+docker build -t myros . 
 docker run -it --name my_melodic --mount type=bind,source=E:\mrk\docker_ws\,target=/code --privileged --net=host myros /bin/bash
