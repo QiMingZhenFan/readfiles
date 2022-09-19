@@ -1,7 +1,5 @@
 #include "back_end.h"
 
-#include "pcl/filters/voxel_grid.h"
-
 #ifdef _OPENMP 
 #include<omp.h>
 #endif

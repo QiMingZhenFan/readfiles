@@ -23,6 +23,7 @@
 // #include <pcl/kdtree/kdtree_flann.h> // cause lz4 error in compile
 #include <pcl/kdtree/kdtree.h> 
 #include <pcl_conversions/pcl_conversions.h>
+#include "pcl/filters/voxel_grid.h"
 
 #include "g2o/config.h"
 #include "g2o/core/block_solver.h"
@@ -56,10 +57,10 @@
 #include "rosbag/bag.h"
 #include "rosbag/view.h"
 #include "tf/transform_datatypes.h"
- #include "geographic_msgs/GeoPoint.h"
- #include <geographic_msgs/GeoPose.h>
- #include <geodesy/wgs84.h>
- #include <geodesy/utm.h>
+#include "geographic_msgs/GeoPoint.h"
+#include <geographic_msgs/GeoPose.h>
+#include <geodesy/wgs84.h>
+#include <geodesy/utm.h>
 
 namespace Eigen {
 using Matrix6d = ::Eigen::Matrix<double, 6, 6>;
