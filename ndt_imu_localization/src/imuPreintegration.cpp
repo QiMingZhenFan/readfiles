@@ -140,12 +140,18 @@ public:
 
 ImuPreintegration::ImuPreintegration()
 {
-        imuTopic = "";
-        ndtOdomTopic = "";
-        imuOdomTopic = "";
+        nh.param<std::string>("localization/imuTopic", imuTopic, "/imu");
+        nh.param<std::string>("localization/ndtOdomTopic", ndtOdomTopic, "ndt/current_pose");
+        nh.param<std::string>("localization/imuOdomTopic", imuOdomTopic, "odometry/imu");
 
-        nh.param<vector<double>>("lio_sam/extrinsicRot", extRotV, vector<double>());
-        nh.param<vector<double>>("lio_sam/extrinsicTrans", extTransV, vector<double>());
+        nh.param<float>("localization/imuAccNoise", imuAccNoise, 0.01);
+        nh.param<float>("localization/imuGyrNoise", imuGyrNoise, 0.001);
+        nh.param<float>("localization/imuAccBiasN", imuAccBiasN, 0.0002);
+        nh.param<float>("localization/imuGyrBiasN", imuGyrBiasN, 0.00003);
+        nh.param<float>("localization/imuGravity", imuGravity, 9.80511);
+
+        nh.param<vector<double>>("localization/extrinsicRot", extRotV, vector<double>());
+        nh.param<vector<double>>("localization/extrinsicTrans", extTransV, vector<double>());
         extRot = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extRotV.data(), 3, 3);
         extTrans = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extTransV.data(), 3, 1);
 
@@ -452,18 +458,18 @@ void ImuPreintegration::imuHandler(const sensor_msgs::Imu::ConstPtr& imu_raw)
 }
 
 
-int main(int argc, char** argv)
-{
-    ros::init(argc, argv, "roboat_loam");
+// int main(int argc, char** argv)
+// {
+//     ros::init(argc, argv, "roboat_loam");
     
-    ImuPreintegration ImuP;
+//     ImuPreintegration ImuP;
 
-    // TransformFusion TF;
+//     // TransformFusion TF;
 
-    ROS_INFO("\033[1;32m----> IMU Preintegration Started.\033[0m");
+//     ROS_INFO("\033[1;32m----> IMU Preintegration Started.\033[0m");
     
-    ros::MultiThreadedSpinner spinner(4);
-    spinner.spin();
+//     ros::MultiThreadedSpinner spinner(4);
+//     spinner.spin();
     
-    return 0;
-}
+//     return 0;
+// }
