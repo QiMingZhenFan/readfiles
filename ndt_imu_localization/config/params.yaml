@@ -1,13 +1,13 @@
 localization:
 
   # NDT Topics
-  pointCloudTopic: ""               # Point cloud data
+  pointCloudTopic: "/carla/lidar1/point_cloud"               # Point cloud data
   imuOdomTopic: "odometry/imu"      # IMU pre-preintegration output odometry
-  mapPath: ""
+  mapPath: "/home/mrk/Experiment/yunle/changed_GlobalMap.pcd"
 
 
   # imu preintegration Topics
-  imuTopic: ""                     # imu raw data
+  imuTopic: "/carla/imu1/imu"                     # imu raw data
   ndtOdomTopic: "ndt/current_pose" # ndt matching output odometry
   
   # Frames
@@ -26,9 +26,9 @@ localization:
 
   # Extrinsics: T_lb (lidar -> imu)
   extrinsicTrans: [0.0, 0.0, 0.0]
-  extrinsicRot: [-1, 0, 0,
+  extrinsicRot: [ 1, 0, 0,
                   0, 1, 0,
-                  0, 0, -1]
+                  0, 0, 1]
 
   # extrinsicRot: [1, 0, 0,
   #                 0, 1, 0,

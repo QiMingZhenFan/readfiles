@@ -2,8 +2,11 @@
 
     <arg name="project" default="ndt_imu_localization"/>
     
+    <!-- Parameters --> 
+    <rosparam file="$(find ndt_imu_localization)/config/params.yaml" command="load" />
+            
     <!--- Run Localization-->
-    <node pkg="$(arg project)" type="$(arg project)_node"   name="$(arg project)_node"    output="screen" 	respawn="true"/>
+    <node pkg="$(arg project)" type="$(arg project)_node"   name="$(arg project)_node"    output="screen" 	respawn="false" launch-prefix="xterm -e gdb -ex run "/>
 
     <!--- Run Rviz-->
     <node pkg="rviz" type="rviz" name="$(arg project)_rviz" args="-d $(find ndt_imu_localization)/launch/include/config/rviz.rviz" />

@@ -71,6 +71,7 @@ class NdtMatching{
     bool initial_pose_set_ = false;
     
 public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     NdtMatching();
     void InitialPoseHandler(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& odom_msg);
     void OdometryHandler(const nav_msgs::Odometry::ConstPtr& odom_msg);

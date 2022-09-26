@@ -107,17 +107,24 @@ void NdtMatching::LoadGlobalMap(){
     ROS_INFO("After downsample, global Map has %ld points.", global_map_->size());
 
     map_load_ = true;
-    ndt_.setInputTarget(global_map_downsample_);
+    ndt_.setInputTarget(global_map_);
 
     sensor_msgs::PointCloud2 pc_to_pub;
     pcl::toROSMsg(*global_map_downsample_, pc_to_pub);
     pc_to_pub.header.frame_id = "map";
 
     ros::Rate rate(0.2);
+    bool have_published = false;
     while(ros::ok()){
-        if(pubNdtOdometry.getNumSubscribers() != 0){
-            pc_to_pub.header.stamp = ros::Time::now();
-            pubGlobalMap.publish(pc_to_pub);
+        if(pubGlobalMap.getNumSubscribers() != 0){
+            if(have_published == false){   // rviz too slow !!!!
+                pc_to_pub.header.stamp = ros::Time::now();
+                pubGlobalMap.publish(pc_to_pub);
+            }
+            have_published = true;
+        }
+        else{
+            have_published = false;
         }
         rate.sleep();
     }

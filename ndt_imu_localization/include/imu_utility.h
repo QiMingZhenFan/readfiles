@@ -125,7 +125,8 @@ public:
     gtsam::Pose3 imu2Lidar;
     // T_lb: tramsform points from imu frame to lidar frame
     gtsam::Pose3 lidar2Imu;
-
+    
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     ImuPreintegration();
     void resetOptimization();
     void resetParams();
