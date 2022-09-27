@@ -26,6 +26,7 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include <tf/transform_broadcaster.h>
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -69,6 +70,7 @@ class NdtMatching{
     bool map_load_ = false;
     double odom_timestamp_ = 0.0;
     bool initial_pose_set_ = false;
+    bool initial_pose_used_ = false;
     
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW

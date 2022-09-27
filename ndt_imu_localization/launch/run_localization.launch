@@ -7,6 +7,7 @@
             
     <!--- Run Localization-->
     <node pkg="$(arg project)" type="$(arg project)_node"   name="$(arg project)_node"    output="screen" 	respawn="false" launch-prefix="xterm -e gdb -ex run "/>
+    <!-- <node pkg="$(arg project)" type="$(arg project)_node"   name="$(arg project)_node"    output="screen" 	respawn="false"/> -->
 
     <!--- Run Rviz-->
     <node pkg="rviz" type="rviz" name="$(arg project)_rviz" args="-d $(find ndt_imu_localization)/launch/include/config/rviz.rviz" />

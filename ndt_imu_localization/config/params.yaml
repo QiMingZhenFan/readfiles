@@ -11,7 +11,7 @@ localization:
   ndtOdomTopic: "ndt/current_pose" # ndt matching output odometry
   
   # Frames
-  lidarFrame: "base_link"
+  lidarFrame: "lidar1"
   baselinkFrame: "base_link"
   odometryFrame: "odom"
   mapFrame: "map"

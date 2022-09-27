@@ -20,7 +20,7 @@ NdtMatching::NdtMatching():global_map_(new pcl::PointCloud<PointType>()){
     // Setting minimum transformation difference for termination condition.
     ndt_.setTransformationEpsilon(0.01);
     ndt_.setStepSize(0.1);
-    ndt_.setResolution(1.0);
+    ndt_.setResolution(2.0);
     ndt_.setMaximumIterations(35);
 }
 
@@ -36,9 +36,13 @@ void NdtMatching::InitialPoseHandler(const geometry_msgs::PoseWithCovarianceStam
     initial_guess_.block<3, 3>(0, 0) = rotation.toRotationMatrix();
     initial_guess_.block<3, 1>(0, 3) = translation.vector();
     initial_pose_set_ = true;
+    initial_pose_used_ = false;
+    ROS_INFO_STREAM("Initial pose has been set!");
 }
 
 void NdtMatching::OdometryHandler(const nav_msgs::Odometry::ConstPtr& odom_msg){
+    // ROS_INFO_STREAM("i am in odometry handler!");
+
     if(!initial_pose_set_)
         return;
     odom_timestamp_ = odom_msg->header.stamp.toSec();
@@ -48,33 +52,42 @@ void NdtMatching::OdometryHandler(const nav_msgs::Odometry::ConstPtr& odom_msg){
     Eigen::Translation3f translation(t.x, t.y, t.z);
 
     // update initial guess
-    initial_guess_.block<3, 3>(0, 0) = rotation.toRotationMatrix();
-    initial_guess_.block<3, 1>(0, 3) = translation.vector();
+    // initial_guess_.block<3, 3>(0, 0) = rotation.toRotationMatrix();
+    // initial_guess_.block<3, 1>(0, 3) = translation.vector();
 }
 
 void NdtMatching::PointCloudHandler(const sensor_msgs::PointCloud2::ConstPtr& pointcloud_msg){
-    if(!map_load_)
+    if(!map_load_ || !initial_pose_set_)
         return;
     pcl::fromROSMsg(*pointcloud_msg, *current_pointcloud_);
 
     // downsample
     // ApproximateVoxelGrid -- faster but less precious
-    pcl::ApproximateVoxelGrid<PointType> approximate_voxel_filter;
-    approximate_voxel_filter.setLeafSize(0.2, 0.2, 0.2);
-    approximate_voxel_filter.setInputCloud(current_pointcloud_);
-    approximate_voxel_filter.filter(*current_pointcloud_);
+    // pcl::ApproximateVoxelGrid<PointType> filter;
+    pcl::VoxelGrid<PointType> filter;
+    filter.setLeafSize(0.2, 0.2, 0.2);
+    filter.setInputCloud(current_pointcloud_);
+    filter.filter(*current_pointcloud_);
 
-    ndt_.align(*current_pointcloud_, initial_guess_);
-    ROS_DEBUG_STREAM("Normal Distributions Transform has converged:" << ndt_.hasConverged()
-        << " score: " << ndt_.getFitnessScore());
+    static Eigen::Matrix4f initial_value = Eigen::Matrix4f::Identity();
+    if(!initial_pose_used_){
+        initial_value = initial_guess_;
+        initial_pose_used_ = true;
+    }
+        
+    ndt_.setInputSource(current_pointcloud_);
+    ndt_.align(*current_pointcloud_, initial_value);
+    ROS_DEBUG_STREAM("Normal Distributions Transform has converged: " << ndt_.hasConverged()
+        << " score: " << ndt_.getFitnessScore() << " iterations: " << ndt_.getFinalNumIteration() << "/" << ndt_.getMaximumIterations());
 
     static Eigen::Matrix4f output = Eigen::Matrix4f::Identity();
     output = ndt_.getFinalTransformation();
-
+    initial_value = output;
+    
     // publish ndt odometry
     nav_msgs::Odometry ndt_odom;
     static unsigned int count = 0;
-    ndt_odom.header.stamp = ros::Time::now();
+    ndt_odom.header.stamp = pointcloud_msg->header.stamp;
     ndt_odom.header.frame_id = "map";
     ndt_odom.header.seq = count++;
     ndt_odom.pose.pose.position.x = output(0,3);
@@ -86,6 +99,13 @@ void NdtMatching::PointCloudHandler(const sensor_msgs::PointCloud2::ConstPtr& po
     ndt_odom.pose.pose.orientation.y = quat.y();
     ndt_odom.pose.pose.orientation.z = quat.z();
     pubNdtOdometry.publish(ndt_odom);
+
+    static tf::TransformBroadcaster broadcaster;
+    tf::Quaternion quad(quat.x(), quat.y(), quat.z(), quat.w());
+    tf::Transform trans;
+    trans.setOrigin(tf::Vector3(output(0,3), output(1,3), output(2,3))); 
+    trans.setRotation(quad);
+    broadcaster.sendTransform(tf::StampedTransform(trans, pointcloud_msg->header.stamp,"map","base_link"));
 }
 
 void NdtMatching::LoadGlobalMap(){
@@ -106,8 +126,8 @@ void NdtMatching::LoadGlobalMap(){
     approximate_voxel_filter.filter(*global_map_downsample_);
     ROS_INFO("After downsample, global Map has %ld points.", global_map_->size());
 
-    map_load_ = true;
     ndt_.setInputTarget(global_map_);
+    map_load_ = true;
 
     sensor_msgs::PointCloud2 pc_to_pub;
     pcl::toROSMsg(*global_map_downsample_, pc_to_pub);
