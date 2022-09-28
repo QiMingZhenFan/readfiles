@@ -11,7 +11,6 @@ int main(int argc, char** argv){
 
     NdtMatching ndt_matching;
     std::thread global_map_thread(&NdtMatching::LoadGlobalMap, &ndt_matching);
-
     // ImuPreintegration imu_preintegration;
     
     ros::MultiThreadedSpinner spinner(4);

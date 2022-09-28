@@ -1,7 +1,6 @@
 #pragma once
 #ifndef NDT_IMU_LOCALIZATION_INCLUDE_NDT_UTILITY_H_
 #define NDT_IMU_LOCALIZATION_INCLUDE_NDT_UTILITY_H_
-#define PCL_NO_PRECOMPILE 
 
 #include <vector>
 #include <cmath>
@@ -71,6 +70,11 @@ class NdtMatching{
     double odom_timestamp_ = 0.0;
     bool initial_pose_set_ = false;
     bool initial_pose_used_ = false;
+
+    double ndt_epsilon_;
+    double ndt_step_size_;
+    int ndt_max_iteration_;
+    double ndt_resolution_;
     
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW

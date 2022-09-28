@@ -16,6 +16,13 @@ localization:
   odometryFrame: "odom"
   mapFrame: "map"
 
+  # NDT params
+  NDTEpsilon: 0.01
+  NDTStepSize: 0.05
+  NDTMaxIteration: 35
+  NDTResolution: 2.0
+
+
   # IMU Settings
   imuAccNoise: 3.9939570888238808e-03
   imuGyrNoise: 1.5636343949698187e-03
