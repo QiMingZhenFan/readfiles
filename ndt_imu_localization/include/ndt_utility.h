@@ -66,6 +66,8 @@ class NdtMatching{
     pcl::NormalDistributionsTransform<PointType, PointType> ndt_;
     Eigen::Matrix4f initial_guess_;
 
+    std::mutex initial_guess_mutux_;
+
     bool map_load_ = false;
     double odom_timestamp_ = 0.0;
     bool initial_pose_set_ = false;
@@ -75,6 +77,7 @@ class NdtMatching{
     double ndt_step_size_;
     int ndt_max_iteration_;
     double ndt_resolution_;
+    double ndt_currentpoints_leafsize_;
     
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW

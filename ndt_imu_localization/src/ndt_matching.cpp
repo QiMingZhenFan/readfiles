@@ -10,9 +10,10 @@ NdtMatching::NdtMatching(){
     nh.param<double>("localization/NDTStepSize", ndt_step_size_, 0.05);
     nh.param<int>("localization/NDTMaxIteration", ndt_max_iteration_, 35);
     nh.param<double>("localization/NDTResolution", ndt_resolution_, 2.0);
+    nh.param<double>("localization/NDTCurrentPointsLeafSize", ndt_currentpoints_leafsize_, 0.5);
     
-    subImuOdom = nh.subscribe<nav_msgs::Odometry>(imuOdomTopic, 5, &NdtMatching::OdometryHandler, this, ros::TransportHints().tcpNoDelay());
-    subPointCloud = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic, 5, &NdtMatching::PointCloudHandler, this, ros::TransportHints().tcpNoDelay());
+    subImuOdom = nh.subscribe<nav_msgs::Odometry>(imuOdomTopic, 1, &NdtMatching::OdometryHandler, this, ros::TransportHints().tcpNoDelay());
+    subPointCloud = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic, 1, &NdtMatching::PointCloudHandler, this, ros::TransportHints().tcpNoDelay());
     sub_initial_pose_ = nh.subscribe<geometry_msgs::PoseWithCovarianceStamped>("/initialpose", 1, &NdtMatching::InitialPoseHandler, this, ros::TransportHints().tcpNoDelay());
 
     pubNdtOdometry = nh.advertise<nav_msgs::Odometry>(ndtOdomTopic, 2000);
@@ -46,8 +47,6 @@ void NdtMatching::InitialPoseHandler(const geometry_msgs::PoseWithCovarianceStam
 }
 
 void NdtMatching::OdometryHandler(const nav_msgs::Odometry::ConstPtr& odom_msg){
-    // ROS_INFO_STREAM("i am in odometry handler!");
-
     if(!initial_pose_set_)
         return;
     odom_timestamp_ = odom_msg->header.stamp.toSec();
@@ -56,9 +55,11 @@ void NdtMatching::OdometryHandler(const nav_msgs::Odometry::ConstPtr& odom_msg){
     Eigen::Quaternionf rotation(quaternion.w, quaternion.x, quaternion.y, quaternion.z);
     Eigen::Translation3f translation(t.x, t.y, t.z);
 
+    std::lock_guard<std::mutex> lck(initial_guess_mutux_);
     // update initial guess
-    // initial_guess_.block<3, 3>(0, 0) = rotation.toRotationMatrix();
-    // initial_guess_.block<3, 1>(0, 3) = translation.vector();
+    initial_guess_.block<3, 3>(0, 0) = rotation.toRotationMatrix();
+    initial_guess_.block<3, 1>(0, 3) = translation.vector();
+    initial_pose_used_ = false;
 }
 
 void NdtMatching::PointCloudHandler(const sensor_msgs::PointCloud2::ConstPtr& pointcloud_msg){
@@ -69,34 +70,29 @@ void NdtMatching::PointCloudHandler(const sensor_msgs::PointCloud2::ConstPtr& po
         ROS_WARN_STREAM_THROTTLE(1, "No MAP!");
         return;
     }
-    ROS_DEBUG_STREAM("map size: " << ndt_.getInputTarget()->points.size());
+    double start_time = ros::Time::now().toSec();
     pcl::fromROSMsg(*pointcloud_msg, *current_pointcloud_);
 
     // downsample
     // ApproximateVoxelGrid -- faster but less precious
     // pcl::ApproximateVoxelGrid<PointType> filter;
     pcl::VoxelGrid<PointType> filter;
-    filter.setLeafSize(0.2, 0.2, 0.2);
+    filter.setLeafSize(ndt_currentpoints_leafsize_, ndt_currentpoints_leafsize_, ndt_currentpoints_leafsize_);
     filter.setInputCloud(current_pointcloud_);
     filter.filter(*current_pointcloud_);
     ROS_DEBUG_STREAM("cur point cloud size after downsample: " << current_pointcloud_->points.size());
     static Eigen::Matrix4f initial_value = Eigen::Matrix4f::Identity();
     if(!initial_pose_used_){
+        std::lock_guard<std::mutex> lck(initial_guess_mutux_);
         initial_value = initial_guess_;
         initial_pose_used_ = true;
     }
         
+    static Eigen::Matrix4f output = Eigen::Matrix4f::Identity();
     ndt_.setInputSource(current_pointcloud_);
     pcl::PointCloud<PointType>::Ptr output_cloud(new pcl::PointCloud<PointType>);
     ndt_.align(*output_cloud, initial_value);
-    ROS_DEBUG_STREAM("Normal Distributions Transform has converged: " << ndt_.hasConverged()
-        << " score: " << ndt_.getFitnessScore() << " iterations: " << ndt_.getFinalNumIteration() << "/" << ndt_.getMaximumIterations());
-
-    static Eigen::Matrix4f output = Eigen::Matrix4f::Identity();
     output = ndt_.getFinalTransformation();
-    std::cout << "------------------------" << std::endl;
-    std::cout << initial_value << std::endl;
-    std::cout << output << std::endl;
     initial_value = output;
 
     // publish ndt odometry
@@ -120,7 +116,13 @@ void NdtMatching::PointCloudHandler(const sensor_msgs::PointCloud2::ConstPtr& po
     tf::Transform trans;
     trans.setOrigin(tf::Vector3(output(0,3), output(1,3), output(2,3))); 
     trans.setRotation(quad);
-    broadcaster.sendTransform(tf::StampedTransform(trans, pointcloud_msg->header.stamp,"map","base_link"));
+    broadcaster.sendTransform(tf::StampedTransform(trans, pointcloud_msg->header.stamp, "map", "base_link"));
+
+    double end_time = ros::Time::now().toSec();
+    ROS_DEBUG_STREAM("Normal Distributions Transform has converged: " << ndt_.hasConverged()
+        << " score: " << ndt_.getFitnessScore() 
+        << " iterations: " << ndt_.getFinalNumIteration() << "/" << ndt_.getMaximumIterations() 
+        << " total time used: " << end_time - start_time);
 }
 
 void NdtMatching::LoadGlobalMap(){

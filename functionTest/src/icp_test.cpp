@@ -25,6 +25,7 @@ int main(int argc, char** argv){
     ros::init(argc, argv, "icp_test");
     ros::NodeHandle nh;
     ros::Publisher pubbef = nh.advertise<sensor_msgs::PointCloud2>("/icp_bef", 100);
+    ros::Publisher pubunused = nh.advertise<sensor_msgs::PointCloud2>("/icp_unused", 100);
     ros::Publisher pubaft = nh.advertise<sensor_msgs::PointCloud2>("/icp_aft", 100);
     ros::Publisher pubori = nh.advertise<sensor_msgs::PointCloud2>("/icp_ori", 100);
 
@@ -96,6 +97,11 @@ int main(int argc, char** argv){
     pcmsg.header.stamp = ros::Time::now();
     pcmsg.header.frame_id = "map";
     pubbef.publish(pcmsg);
+
+    pcl::toROSMsg(*unused_result, pcmsg);
+    pcmsg.header.stamp = ros::Time::now();
+    pcmsg.header.frame_id = "map";
+    pubunused.publish(pcmsg);
 
     pcl::PointCloud<PointType>::Ptr transformed_cloud_corrected (new pcl::PointCloud<PointType> ());
     pcl::transformPointCloud(*transformed_cloud, *transformed_cloud_corrected, transform.inverse());

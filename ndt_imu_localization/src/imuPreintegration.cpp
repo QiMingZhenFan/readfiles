@@ -217,7 +217,8 @@ void ImuPreintegration::odometryHandler(const nav_msgs::Odometry::ConstPtr& odom
     float r_y = odomMsg->pose.pose.orientation.y;
     float r_z = odomMsg->pose.pose.orientation.z;
     float r_w = odomMsg->pose.pose.orientation.w;
-    bool degenerate = (int)odomMsg->pose.covariance[0] == 1 ? true : false;
+    // bool degenerate = (int)odomMsg->pose.covariance[0] == 1 ? true : false;
+    bool degenerate = false;
     gtsam::Pose3 lidarPose = gtsam::Pose3(gtsam::Rot3::Quaternion(r_w, r_x, r_y, r_z), gtsam::Point3(p_x, p_y, p_z));
 
 
@@ -260,7 +261,8 @@ void ImuPreintegration::odometryHandler(const nav_msgs::Odometry::ConstPtr& odom
 
         imuIntegratorImu_->resetIntegrationAndSetBias(prevBias_);
         imuIntegratorOpt_->resetIntegrationAndSetBias(prevBias_);
-        
+        prevState_ = gtsam::NavState(prevPose_, prevVel_);
+
         key = 1;
         systemInitialized = true;
         return;
@@ -293,6 +295,7 @@ void ImuPreintegration::odometryHandler(const nav_msgs::Odometry::ConstPtr& odom
         optimizer.update(graphFactors, graphValues);
         graphFactors.resize(0);
         graphValues.clear();
+        prevState_ = gtsam::NavState(prevPose_, prevVel_);
 
         key = 1;
     }

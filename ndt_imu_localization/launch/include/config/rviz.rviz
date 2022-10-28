@@ -6,8 +6,8 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /PointCloud21
-        - /PointCloud22
+        - /Odometry1/Shape1
+        - /Odometry2/Shape1
       Splitter Ratio: 0.5
     Tree Height: 549
   - Class: rviz/Selection
@@ -99,9 +99,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 0.995476484298706
+      Max Intensity: 0.9954763054847717
       Min Color: 0; 0; 0
-      Min Intensity: 0.6736862659454346
+      Min Intensity: 0.673916757106781
       Name: PointCloud2
       Position Transformer: XYZ
       Queue Size: 10
@@ -113,6 +113,89 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
+      Value: true
+    - Angle Tolerance: 0.10000000149011612
+      Class: rviz/Odometry
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Color Style: Unique
+          Frame: Local
+          Offset: 1
+          Scale: 1
+          Value: true
+        Position:
+          Alpha: 0.30000001192092896
+          Color: 204; 51; 204
+          Scale: 1
+          Value: true
+        Value: true
+      Enabled: true
+      Keep: 1
+      Name: Odometry
+      Position Tolerance: 0.10000000149011612
+      Shape:
+        Alpha: 1
+        Axes Length: 1
+        Axes Radius: 0.10000000149011612
+        Color: 255; 25; 0
+        Head Length: 1
+        Head Radius: 1
+        Shaft Length: 1
+        Shaft Radius: 0.20000000298023224
+        Value: Arrow
+      Topic: /ndt/current_pose
+      Unreliable: false
+      Value: true
+    - Angle Tolerance: 0.10000000149011612
+      Class: rviz/Odometry
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Color Style: Unique
+          Frame: Local
+          Offset: 1
+          Scale: 1
+          Value: true
+        Position:
+          Alpha: 0.30000001192092896
+          Color: 204; 51; 204
+          Scale: 1
+          Value: true
+        Value: true
+      Enabled: true
+      Keep: 1
+      Name: Odometry
+      Position Tolerance: 0.10000000149011612
+      Shape:
+        Alpha: 1
+        Axes Length: 1
+        Axes Radius: 0.10000000149011612
+        Color: 138; 226; 52
+        Head Length: 1
+        Head Radius: 1
+        Shaft Length: 1
+        Shaft Radius: 0.20000000298023224
+        Value: Arrow
+      Topic: /odometry/imu
+      Unreliable: false
+      Value: true
+    - Alpha: 1
+      Axes Length: 1
+      Axes Radius: 0.10000000149011612
+      Class: rviz/Pose
+      Color: 32; 74; 135
+      Enabled: true
+      Head Length: 1
+      Head Radius: 1
+      Name: Pose
+      Shaft Length: 1
+      Shaft Radius: 0.20000000298023224
+      Shape: Arrow
+      Topic: /ndt/current_pose_fake
+      Unreliable: false
       Value: true
   Enabled: true
   Global Options:
@@ -142,25 +225,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 471.4251708984375
+      Distance: 200.71893310546875
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0
-        Y: 0
-        Z: 0
+        X: 194.84251403808594
+        Y: 53.07992172241211
+        Z: 0.5593479871749878
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.5597963333129883
+      Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.708581447601318
+      Yaw: 4.713586807250977
     Saved: ~
 Window Geometry:
   Displays:
@@ -179,4 +262,4 @@ Window Geometry:
     collapsed: true
   Width: 1267
   X: 598
-  Y: 172
+  Y: 112

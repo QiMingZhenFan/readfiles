@@ -1,5 +1,5 @@
 <launch>
-    <param name="pcd_file_name" type="string" value="/home/mrk/Experiment/town02-0407/pointcloud.pcd" />
+    <param name="pcd_file_name" type="string" value="/home/mrk/Experiment/yunle/point_clouds/800.446699726.pcd" />
     <param name="x" type="double" value="10" />
     <param name="y" type="double" value="10" />
     <param name="z" type="double" value="10" />
@@ -7,5 +7,6 @@
     <param name="theta" type="double" value="30" />  
 
     <node pkg="functionTest" type="icp_test" name="icp_test" output="screen" />
+    <node pkg="rviz" type="rviz" name="icp_test_rviz" args="-d $(find functionTest)/rviz/icp_test.rviz" />
 
 </launch>

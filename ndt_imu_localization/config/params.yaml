@@ -18,9 +18,10 @@ localization:
 
   # NDT params
   NDTEpsilon: 0.01
-  NDTStepSize: 0.05
+  NDTStepSize: 0.1
   NDTMaxIteration: 35
   NDTResolution: 2.0
+  NDTCurrentPointsLeafSize: 0.4
 
 
   # IMU Settings
