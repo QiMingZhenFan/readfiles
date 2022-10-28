@@ -91,6 +91,27 @@ void WritePoseToFile(const std::string& file_path_name, const std::unordered_map
     outFile.close();
 }
 
+void WriteFinalPointCloudToPCDFile(const std::string& file_path_name, const std::unordered_map<int, Node>& nodes){
+    pcl::PointCloud<PointType>::Ptr total_map(new pcl::PointCloud<PointType>());
+    for(const auto& [id, node] : nodes){
+        pcl::PointCloud<PointType>::Ptr temp_map(new pcl::PointCloud<PointType>());
+        pcl::transformPointCloud(*node.cloud, *temp_map, node.opt_pose.CalcTransformMat());
+        *total_map += *temp_map;
+    }
+    // downsample
+    ROS_INFO_STREAM("Downsampling, pre points: " << total_map->points.size() << ".");
+    pcl::PointCloud<PointType>::Ptr total_map_downsampled(new pcl::PointCloud<PointType>());
+    double voxel_leaf_size = 0.2;
+    pcl::VoxelGrid<PointType> voxel;
+    voxel.setInputCloud(total_map);
+    voxel.setLeafSize(voxel_leaf_size, voxel_leaf_size, voxel_leaf_size);
+    voxel.filter(*total_map_downsampled);
+    ROS_INFO_STREAM("Downsampled, aft points: " << total_map_downsampled->points.size() << ".");
+    ROS_INFO_STREAM("Saving PCD file...");
+
+    pcl::io::savePCDFileASCII(file_path_name, *total_map_downsampled);
+    ROS_INFO_STREAM("PCD file saved!");
+}
 } // namespace
 
 
@@ -100,6 +121,7 @@ void BackEnd::Init(){
     lidar_frame_nums_ = 0;
     node_nums_ = 0;
     param_output_file_path = "/tmp/opt_pose.csv";
+    param_output_pcdfile_path = "/tmp/total_map.pcd";
 
     // check if topic is empty
     if(param_gnss_topic_.empty() || param_pose_topic_.empty() || param_lidar_topic_.empty()){
@@ -252,7 +274,7 @@ void BackEnd::CollectData(){
     if(param_use_gnss_)
         assert(point_clouds_.size() == gnss_.size() && point_clouds_.size() == odometry_poses_.size());    
     else
-        assert(point_clouds_.size() ==  odometry_poses_.size());    
+        assert(point_clouds_.size() == odometry_poses_.size());    
 
     auto ConstructSubmap = [this](int left, int mid, int right, Node& node){
         left = left < 0? 0: left;
@@ -264,7 +286,14 @@ void BackEnd::CollectData(){
                 continue;
             }
             else{
-                Eigen::Transform<double,3,Eigen::Isometry>  trans_cur = node.pose.position * node.pose.rotation;
+                Eigen::Transform<double,3,Eigen::Isometry>  trans_cur;
+                trans_cur.translation() << odometry_poses_[i].pose.position.x, 
+                                        odometry_poses_[i].pose.position.y,
+                                        odometry_poses_[i].pose.position.z;
+                trans_cur.matrix().block<3,3>(0,0) = Eigen::Quaterniond(odometry_poses_[i].pose.orientation.w,
+                                                                        odometry_poses_[i].pose.orientation.x,
+                                                                        odometry_poses_[i].pose.orientation.y,
+                                                                        odometry_poses_[i].pose.orientation.z).toRotationMatrix();
                 Eigen::Transform<double,3,Eigen::Isometry>  trans_mid_cur = trans_mid * trans_cur.inverse();
                 pcl::PointCloud<PointType> point_cloud_cur;
                 pcl::fromROSMsg(point_clouds_[i], point_cloud_cur);
@@ -283,12 +312,12 @@ void BackEnd::CollectData(){
             auto& temp_node = nodes[node_index];
             // 2. fill pose
             temp_node.pose.position.translation() << odometry_poses_[i].pose.position.x, 
-                                                                                                odometry_poses_[i].pose.position.y,
-                                                                                                odometry_poses_[i].pose.position.z;
+                                                    odometry_poses_[i].pose.position.y,
+                                                    odometry_poses_[i].pose.position.z;
             temp_node.pose.rotation = Eigen::Quaterniond(odometry_poses_[i].pose.orientation.w,
-                                                                                                               odometry_poses_[i].pose.orientation.x,
-                                                                                                               odometry_poses_[i].pose.orientation.y,
-                                                                                                               odometry_poses_[i].pose.orientation.z);
+                                                        odometry_poses_[i].pose.orientation.x,
+                                                        odometry_poses_[i].pose.orientation.y,
+                                                        odometry_poses_[i].pose.orientation.z);
             // 3. fill gnss pose and information
             // change gps readings in wsg84 to utm
             if(param_use_gnss_){
@@ -395,7 +424,7 @@ void BackEnd::PairMatching(const int node1_id, const int node2_id){
 
     // TODO: add more metrics to judge the outcome
     // add constarints here
-    if(gicp.hasConverged()){
+    if(gicp.hasConverged() && gicp.getFitnessScore() < 1){
         Constraint temp;
         temp.transform_1_2  = gicp.getFinalTransformation();
         temp.node1_id = node1.index;
@@ -403,10 +432,18 @@ void BackEnd::PairMatching(const int node1_id, const int node2_id){
         temp.fitness_score = gicp.getFitnessScore();
         # pragma omp critical
         constraints[node1.index][node2.index] = temp;
-        ROS_INFO_STREAM("pair accepted: " << node1.index << " <---> " << node2.index << ".");
+        # pragma omp critical
+        {
+            ROS_INFO_STREAM("pair accepted: " << node1.index << " <---> " << node2.index <<
+                            " with fitness score: " << temp.fitness_score <<".");
+        }
         return;
     }
-    ROS_WARN_STREAM("reject this pair: " << node1.index << " <---> " << node2.index << ".");
+    # pragma omp critical
+    {
+        ROS_WARN_STREAM("reject this pair: " << node1.index << " <---> " << node2.index <<
+                        " with fitness score: " << gicp.getFitnessScore() <<".");
+    }
 }
 
 void BackEnd::AddConstraintToGraph(){
@@ -451,7 +488,7 @@ void BackEnd::AddConstraintToGraph(){
                                     cur_constraint.fitness_score, cur_constraint.fitness_score,
                                     cur_constraint.fitness_score, cur_constraint.fitness_score;
             // TODO: test if this way to set information is stable
-            Eigen::Matrix<double, 6, 6> information = diagonal_vec.asDiagonal();
+            Eigen::Matrix<double, 6, 6> information = diagonal_vec.asDiagonal().inverse();
             // information.block<3, 3>(0, 0) = transNoise.inverse();
             // information.block<3, 3>(3, 3) = rotNoise.inverse();
             g2o::VertexSE3* prev = vertices[id1];
@@ -475,6 +512,8 @@ void BackEnd::AddConstraintToGraph(){
         ROS_ERROR( "make sure have at least one node fixed when no gnss data! shutdown this node.");
         ros::shutdown();
     }
+
+    ROS_INFO("Current graph has %lu nodes and %lu edges!", vertices.size(), edges.size());
 }
 
 void BackEnd::Run(){
@@ -517,6 +556,7 @@ void BackEnd::Run(){
     
     ROS_INFO("**************  finish optimization  **************");
     // write optimized pose into Node struct
+    WriteFinalPointCloudToPCDFile("/tmp/orig_map.pcd", nodes);
     for(auto& [id, node] : nodes){
         double xyzqxyzw[7];
         vertices[id]->getEstimateData(xyzqxyzw);
@@ -527,7 +567,9 @@ void BackEnd::Run(){
     ROS_INFO("**************  write data  **************");
     ROS_INFO_STREAM("write data to: " << param_output_file_path);
     WritePoseToFile(param_output_file_path, nodes);
+    WriteFinalPointCloudToPCDFile(param_output_pcdfile_path, nodes);
     ros::WallTime aft(ros::WallTime::now());
     ROS_INFO_STREAM("total time consuming: " << (aft - bef).toSec() << "s.");
+
 }
 } // namespace back_end

@@ -89,6 +89,12 @@ struct Pose
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     Eigen::Translation3d position;
     Eigen::Quaterniond rotation;
+    Eigen::Matrix4f CalcTransformMat() const{
+        Eigen::Matrix4f transform = Eigen::Matrix4f::Identity();
+        transform.block<3,3>(0,0) = rotation.toRotationMatrix().template cast<float>();
+        transform.block<3,1>(0,3) = position.vector().template cast<float>();
+        return transform;
+    }
 };
 
 struct Node{
@@ -150,6 +156,7 @@ class BackEnd{
     const std::string param_pose_topic_;
     const std::string param_gnss_topic_;
     std::string param_output_file_path;
+    std::string param_output_pcdfile_path;
 
     std::unordered_map<int, Node> nodes;
     std::unordered_map<int, std::unordered_set<int>> pairs;
