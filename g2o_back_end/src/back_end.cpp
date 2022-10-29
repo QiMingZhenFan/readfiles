@@ -34,26 +34,26 @@ bool FindNearstTwoFrame(const std::vector<P>& msg, double target_time, int& inde
 }
 
 void InterpolateTargetGnss(sensor_msgs::NavSatFix& target, 
-                                                            const std_msgs::Header& header,
-                                                            const sensor_msgs::NavSatFix& left,
-                                                            const sensor_msgs::NavSatFix& right){
+                            const std_msgs::Header& header,
+                            const sensor_msgs::NavSatFix& left,
+                            const sensor_msgs::NavSatFix& right){
     target = left;
     target.header.stamp = header.stamp;
     double ratio = (header.stamp.toSec() - left.header.stamp.toSec()) / 
-                                (right.header.stamp.toSec() - left.header.stamp.toSec());
+                    (right.header.stamp.toSec() - left.header.stamp.toSec());
     target.latitude += ratio * (right.latitude - left.latitude);
     target.longitude += ratio * (right.longitude - left.longitude);
     target.altitude += ratio * (right.altitude - left.altitude);
 }
 
 void InterpolateTargetPose(geometry_msgs::PoseStamped& target, 
-                                                            const std_msgs::Header& header,
-                                                            const geometry_msgs::PoseStamped& left,
-                                                            const geometry_msgs::PoseStamped& right){
+                            const std_msgs::Header& header,
+                            const geometry_msgs::PoseStamped& left,
+                            const geometry_msgs::PoseStamped& right){
     target = left;
     target.header.stamp = header.stamp;
     double ratio = (header.stamp.toSec() - left.header.stamp.toSec()) / 
-                                (right.header.stamp.toSec() - left.header.stamp.toSec());
+                    (right.header.stamp.toSec() - left.header.stamp.toSec());
     auto& vec4l = left.pose.orientation;
     Eigen::Quaterniond ql(vec4l.w, vec4l.x, vec4l.y, vec4l.z);
     auto& vec4r = right.pose.orientation;
@@ -79,23 +79,26 @@ void WritePoseToFile(const std::string& file_path_name, const std::unordered_map
     for(int i = 0; i <nodes.size(); ++i){
         auto& node = nodes.at(i);
         outFile << node.time_stamp.toSec()
-                        << ' ' << node.opt_pose.position.x()
-                        << ' ' << node.opt_pose.position.y()
-                        << ' ' << node.opt_pose.position.z()
-                        << ' ' << node.opt_pose.rotation.x()
-                        << ' ' << node.opt_pose.rotation.y()
-                        << ' ' << node.opt_pose.rotation.z()
-                        << ' ' << node.opt_pose.rotation.w()
-                        << std::endl;
+                << ' ' << node.opt_pose.position.x()
+                << ' ' << node.opt_pose.position.y()
+                << ' ' << node.opt_pose.position.z()
+                << ' ' << node.opt_pose.rotation.x()
+                << ' ' << node.opt_pose.rotation.y()
+                << ' ' << node.opt_pose.rotation.z()
+                << ' ' << node.opt_pose.rotation.w()
+                << std::endl;
     }
     outFile.close();
 }
 
-void WriteFinalPointCloudToPCDFile(const std::string& file_path_name, const std::unordered_map<int, Node>& nodes){
+void WriteFinalPointCloudToPCDFile(const std::string& file_path_name, const std::unordered_map<int, Node>& nodes, bool original){
     pcl::PointCloud<PointType>::Ptr total_map(new pcl::PointCloud<PointType>());
     for(const auto& [id, node] : nodes){
         pcl::PointCloud<PointType>::Ptr temp_map(new pcl::PointCloud<PointType>());
-        pcl::transformPointCloud(*node.cloud, *temp_map, node.opt_pose.CalcTransformMat());
+        if(original)
+            pcl::transformPointCloud(*node.cloud, *temp_map, node.pose.CalcTransformMat());
+        else
+            pcl::transformPointCloud(*node.cloud, *temp_map, node.opt_pose.CalcTransformMat());
         *total_map += *temp_map;
     }
     // downsample
@@ -111,6 +114,12 @@ void WriteFinalPointCloudToPCDFile(const std::string& file_path_name, const std:
 
     pcl::io::savePCDFileASCII(file_path_name, *total_map_downsampled);
     ROS_INFO_STREAM("PCD file saved!");
+}
+
+void WriteSubmapPointCloudToPCDFile(const std::string& file_path, const Node& node, int id){
+    pcl::PointCloud<PointType>::Ptr temp_map(new pcl::PointCloud<PointType>());
+    pcl::transformPointCloud(*node.cloud, *temp_map, node.pose.CalcTransformMat());
+    pcl::io::savePCDFileASCII(file_path + std::to_string(id) + ".pcd", *(node.cloud));
 }
 } // namespace
 
@@ -160,8 +169,8 @@ void BackEnd::Init(){
 
 // read bag file to load poses, gnss readings and lidar points
 void BackEnd::ReadDataFromBag(std::vector<sensor_msgs::PointCloud2>& point_clouds,\
-                                                                            std::vector<sensor_msgs::NavSatFix>& gnss,\
-                                                                            std::vector<geometry_msgs::PoseStamped>& odometry_poses){
+                                std::vector<sensor_msgs::NavSatFix>& gnss,\
+                                std::vector<geometry_msgs::PoseStamped>& odometry_poses){
     rosbag::Bag bag;    
 
     bag.open(param_bag_full_path_, rosbag::bagmode::Read);
@@ -180,43 +189,43 @@ void BackEnd::ReadDataFromBag(std::vector<sensor_msgs::PointCloud2>& point_cloud
 
     // TODO: wonder if this method make sure datas follow the timing order
     for(const rosbag::MessageInstance& m:view){
-        if (m.getTopic() == param_lidar_topic_ || ("/" + m.getTopic() == param_lidar_topic_))
-        {
-          sensor_msgs::PointCloud2::Ptr message = m.instantiate<sensor_msgs::PointCloud2>();
-          if (message != NULL)
-            point_clouds.emplace_back(*message);
-        }
-        if (m.getTopic() == param_pose_topic_ || ("/" + m.getTopic() == param_pose_topic_))
-        {
-            // TODO: determine which kind of message to use here
-            geometry_msgs::PoseStamped::Ptr message0 = m.instantiate<geometry_msgs::PoseStamped>();
-            if (message0 != NULL){
-                odometry_poses.emplace_back(*message0);
-                continue;
-            }
-            nav_msgs::Odometry::Ptr message1 = m.instantiate<nav_msgs::Odometry>();
-            if (message1 != NULL){
-                odometry_poses.emplace_back();
-                auto& cur_posestamped = odometry_poses.back();
-                cur_posestamped.header = message1->header;
-                cur_posestamped.pose = message1->pose.pose;
-                continue;
-            }
-        }
-        if (m.getTopic() == param_gnss_topic_ || ("/" + m.getTopic() == param_gnss_topic_))
-        {
-            sensor_msgs::NavSatFix::Ptr message = m.instantiate<sensor_msgs::NavSatFix>();
-            if (message != NULL){
-                gnss.emplace_back(*message);
-            }
-        }
+    if (m.getTopic() == param_lidar_topic_ || ("/" + m.getTopic() == param_lidar_topic_))
+    {
+    sensor_msgs::PointCloud2::Ptr message = m.instantiate<sensor_msgs::PointCloud2>();
+    if (message != NULL)
+    point_clouds.emplace_back(*message);
+    }
+    if (m.getTopic() == param_pose_topic_ || ("/" + m.getTopic() == param_pose_topic_))
+    {
+    // TODO: determine which kind of message to use here
+    geometry_msgs::PoseStamped::Ptr message0 = m.instantiate<geometry_msgs::PoseStamped>();
+    if (message0 != NULL){
+    odometry_poses.emplace_back(*message0);
+    continue;
+    }
+    nav_msgs::Odometry::Ptr message1 = m.instantiate<nav_msgs::Odometry>();
+    if (message1 != NULL){
+    odometry_poses.emplace_back();
+    auto& cur_posestamped = odometry_poses.back();
+    cur_posestamped.header = message1->header;
+    cur_posestamped.pose = message1->pose.pose;
+    continue;
+    }
+    }
+    if (m.getTopic() == param_gnss_topic_ || ("/" + m.getTopic() == param_gnss_topic_))
+    {
+    sensor_msgs::NavSatFix::Ptr message = m.instantiate<sensor_msgs::NavSatFix>();
+    if (message != NULL){
+    gnss.emplace_back(*message);
+    }
+    }
     }
     bag.close();
-}
+    }
 
 void BackEnd::AlignTimeStamp(std::vector<sensor_msgs::PointCloud2>& point_clouds,
-                                                                        std::vector<sensor_msgs::NavSatFix>& gnss,
-                                                                        std::vector<geometry_msgs::PoseStamped>& odometry_poses){
+                                std::vector<sensor_msgs::NavSatFix>& gnss,
+                                std::vector<geometry_msgs::PoseStamped>& odometry_poses){
     // temporarily store the output
     std::vector<sensor_msgs::PointCloud2> temp_pc;
     std::vector<sensor_msgs::NavSatFix> temp_gnss;
@@ -248,6 +257,10 @@ void BackEnd::AlignTimeStamp(std::vector<sensor_msgs::PointCloud2>& point_clouds
                 temp_op.emplace_back();
                 auto& target_pose = temp_op.back();
                 InterpolateTargetPose(target_pose, pc.header, odometry_poses[index_op], odometry_poses[index_op+1]);
+                // ROS_INFO("timestamp of pc: %f, and odom front: %f, and odom back: %f.", 
+                //         pc_time, 
+                //         odometry_poses[index_op].header.stamp.toSec(),
+                //         odometry_poses[index_op+1].header.stamp.toSec());
             }
         }
     }
@@ -288,13 +301,13 @@ void BackEnd::CollectData(){
             else{
                 Eigen::Transform<double,3,Eigen::Isometry>  trans_cur;
                 trans_cur.translation() << odometry_poses_[i].pose.position.x, 
-                                        odometry_poses_[i].pose.position.y,
-                                        odometry_poses_[i].pose.position.z;
+                                            odometry_poses_[i].pose.position.y,
+                                            odometry_poses_[i].pose.position.z;
                 trans_cur.matrix().block<3,3>(0,0) = Eigen::Quaterniond(odometry_poses_[i].pose.orientation.w,
                                                                         odometry_poses_[i].pose.orientation.x,
                                                                         odometry_poses_[i].pose.orientation.y,
                                                                         odometry_poses_[i].pose.orientation.z).toRotationMatrix();
-                Eigen::Transform<double,3,Eigen::Isometry>  trans_mid_cur = trans_mid * trans_cur.inverse();
+                Eigen::Transform<double,3,Eigen::Isometry>  trans_mid_cur = trans_mid.inverse() * trans_cur;
                 pcl::PointCloud<PointType> point_cloud_cur;
                 pcl::fromROSMsg(point_clouds_[i], point_cloud_cur);
                 pcl::transformPointCloud(point_cloud_cur, point_cloud_cur, trans_mid_cur.matrix().cast<float>());
@@ -346,7 +359,8 @@ void BackEnd::CollectData(){
             pose_point.intensity = node_index;
             pose_cloud->push_back(pose_point);
 
-            ROS_INFO_STREAM("in constructing submap, node id: " << node_index  << ", submap points: " <<temp_node.cloud->size());
+            WriteSubmapPointCloudToPCDFile("/code/maps/", temp_node, node_index);
+            ROS_INFO_STREAM("in constructing submap, node id: " << node_index  << ", submap points: " << temp_node.cloud->size());
         }
     }
 
@@ -364,7 +378,7 @@ bool BackEnd::AddPair(const int node1_id, const int node2_id){
         return false;
     }
     if(pairs.count(less_id) != 0 && pairs[less_id].count(larger_id) != 0){
-        ROS_WARN_STREAM( "pair already exist!");
+        ROS_WARN_STREAM("pair already exist!");
         return false;
     }
     pairs[less_id].insert(larger_id); 
@@ -424,16 +438,15 @@ void BackEnd::PairMatching(const int node1_id, const int node2_id){
 
     // TODO: add more metrics to judge the outcome
     // add constarints here
-    if(gicp.hasConverged() && gicp.getFitnessScore() < 1){
+    if(gicp.hasConverged() && gicp.getFitnessScore() < 2){
         Constraint temp;
-        temp.transform_1_2  = gicp.getFinalTransformation();
+        temp.transform_1_2 = gicp.getFinalTransformation();
         temp.node1_id = node1.index;
         temp.node2_id = node2.index;
         temp.fitness_score = gicp.getFitnessScore();
         # pragma omp critical
-        constraints[node1.index][node2.index] = temp;
-        # pragma omp critical
         {
+            constraints[node1.index][node2.index] = temp;
             ROS_INFO_STREAM("pair accepted: " << node1.index << " <---> " << node2.index <<
                             " with fitness score: " << temp.fitness_score <<".");
         }
@@ -485,8 +498,8 @@ void BackEnd::AddConstraintToGraph(){
         for(const auto& [id2, cur_constraint] : temp_map){
             Eigen::Vector6d diagonal_vec;
             diagonal_vec << cur_constraint.fitness_score, cur_constraint.fitness_score,
-                                    cur_constraint.fitness_score, cur_constraint.fitness_score,
-                                    cur_constraint.fitness_score, cur_constraint.fitness_score;
+                            cur_constraint.fitness_score, cur_constraint.fitness_score,
+                            cur_constraint.fitness_score, cur_constraint.fitness_score;
             // TODO: test if this way to set information is stable
             Eigen::Matrix<double, 6, 6> information = diagonal_vec.asDiagonal().inverse();
             // information.block<3, 3>(0, 0) = transNoise.inverse();
@@ -556,7 +569,7 @@ void BackEnd::Run(){
     
     ROS_INFO("**************  finish optimization  **************");
     // write optimized pose into Node struct
-    WriteFinalPointCloudToPCDFile("/tmp/orig_map.pcd", nodes);
+    WriteFinalPointCloudToPCDFile("/tmp/orig_map.pcd", nodes, true);
     for(auto& [id, node] : nodes){
         double xyzqxyzw[7];
         vertices[id]->getEstimateData(xyzqxyzw);
@@ -567,7 +580,7 @@ void BackEnd::Run(){
     ROS_INFO("**************  write data  **************");
     ROS_INFO_STREAM("write data to: " << param_output_file_path);
     WritePoseToFile(param_output_file_path, nodes);
-    WriteFinalPointCloudToPCDFile(param_output_pcdfile_path, nodes);
+    WriteFinalPointCloudToPCDFile(param_output_pcdfile_path, nodes, false);
     ros::WallTime aft(ros::WallTime::now());
     ROS_INFO_STREAM("total time consuming: " << (aft - bef).toSec() << "s.");
 
