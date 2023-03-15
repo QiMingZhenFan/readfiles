@@ -1,17 +1,25 @@
 localization:
 
   # NDT Topics
-  pointCloudTopic: "/carla/lidar1/point_cloud"               # Point cloud data
+  pointCloudTopic: "/velodyne_points"               # Point cloud data
+  # pointCloudTopic: "/carla/lidar1/point_cloud"               # Point cloud data
   imuOdomTopic: "odometry/imu"      # IMU pre-preintegration output odometry
-  mapPath: "/home/mrk/Experiment/yunle/changed_GlobalMap.pcd"
+  mapPath: "/home/mrk/Experiment/zetong/total_map.pcd"
+  # mapPath: "/home/mrk/Experiment/yunle/changed_GlobalMap.pcd"
+  # mapPath: "/home/mrk/Experiment/airport/filtered_airport.pcd"
 
+  # imu use or not
+  use_imu: true
+  # use_imu: false
 
   # imu preintegration Topics
-  imuTopic: "/carla/imu1/imu"                     # imu raw data
-  ndtOdomTopic: "ndt/current_pose" # ndt matching output odometry
+  imuTopic: "/imu"                     # imu raw data
+  # imuTopic: "/carla/imu1/imu"                     # imu raw data
+  ndtOdomTopic: "ndt/current_pose_est" # ndt matching output odometry
   
   # Frames
-  lidarFrame: "lidar1"
+  lidarFrame: "velodyne"
+  # lidarFrame: "lidar1"
   baselinkFrame: "base_link"
   odometryFrame: "odom"
   mapFrame: "map"

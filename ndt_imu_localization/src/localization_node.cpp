@@ -11,8 +11,11 @@ int main(int argc, char** argv){
 
     NdtMatching ndt_matching;
     std::thread global_map_thread(&NdtMatching::LoadGlobalMap, &ndt_matching);
-    ImuPreintegration imu_preintegration;
     
+    ROS_INFO_STREAM("IMU USE STATUS: " << ndt_matching.GetIMUUseFlag() << "??? " << true);
+
+    ImuPreintegration imu_preintegration(ndt_matching.GetIMUUseFlag());
+
     ros::MultiThreadedSpinner spinner(4);
     spinner.spin();
     global_map_thread.join();

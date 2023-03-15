@@ -1,9 +1,10 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.15)
 project(functionTest)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-add_compile_options(-std=c++11)
-SET(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-std=c++11 -pthread")
+add_compile_options(-std=c++14)
+SET(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-std=c++14 -pthread -O3")
+set(CMAKE_CXX_STANDARD 14)
 SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "/usr/share/cmake/geographiclib")
 
 ## Find catkin macros and libraries
@@ -21,6 +22,33 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(PCL REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(GeographicLib REQUIRED)
+find_package(teaserpp REQUIRED)
+
+add_library(matplotlib_cpp INTERFACE)
+target_compile_features(matplotlib_cpp INTERFACE
+  cxx_std_11
+)
+# TODO: Use `Development.Embed` component when requiring cmake >= 3.18
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+target_link_libraries(matplotlib_cpp INTERFACE
+  Python3::Python
+  Python3::Module
+)
+find_package(Python3 COMPONENTS NumPy)
+if(Python3_NumPy_FOUND)
+  target_link_libraries(matplotlib_cpp INTERFACE
+    Python3::NumPy
+  )
+else()
+  target_compile_definitions(matplotlib_cpp INTERFACE WITHOUT_NUMPY)
+endif()
+
+message("Python3_FOUND:${Python3_FOUND}")
+message("Python3_VERSION:${Python3_VERSION}")
+message("Python3_Development_FOUND:${Python3_Development_FOUND}")
+message("Python3_Interpreter_FOUND:${Python3_Interpreter_FOUND}")
+message("Python3_NumPy_FOUND:${Python3_NumPy_FOUND}")
+message("Python3_LIBRARIES:${Python3_LIBRARIES}")
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -124,6 +152,7 @@ DEPENDS  PCL
 ## Your package locations should be listed before other locations
 include_directories(
 # include
+  src/
   ${catkin_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
   ${Eigen3_INCLUDE_DIRS}
@@ -148,6 +177,7 @@ add_executable(traj_eval src/traj_eval.cpp)
 add_executable(gps_lla2local src/gps_lla2local.cpp)
 add_executable(segmentation_test src/segmentation_test.cpp)
 add_executable(plane_cylinder_extract src/plane_cylinder_extract.cpp)
+add_executable(pose_evaluator src/pose_evaluator.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -164,6 +194,7 @@ target_link_libraries(icp_test
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
   ${Eigen3_LIBRARIES}
+  teaserpp::teaser_registration teaserpp::teaser_io
 )
 target_link_libraries(traj_eval
   ${catkin_LIBRARIES}
@@ -181,6 +212,10 @@ target_link_libraries(segmentation_test
 target_link_libraries(plane_cylinder_extract
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
+)
+target_link_libraries(pose_evaluator PRIVATE  
+  ${catkin_LIBRARIES}
+  matplotlib_cpp
 )
 #############
 ## Install ##

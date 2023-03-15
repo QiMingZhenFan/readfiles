@@ -138,45 +138,52 @@ public:
 };
 */
 
-ImuPreintegration::ImuPreintegration()
+ImuPreintegration::ImuPreintegration(){}
+
+ImuPreintegration::ImuPreintegration(bool use_imu)
 {
-        nh.param<std::string>("localization/imuTopic", imuTopic, "/imu");
-        nh.param<std::string>("localization/ndtOdomTopic", ndtOdomTopic, "ndt/current_pose");
-        nh.param<std::string>("localization/imuOdomTopic", imuOdomTopic, "odometry/imu");
+    if(!use_imu){
+        ROS_INFO("we don't use imu!");
+        return;
+    }
+    
+    nh.param<std::string>("localization/imuTopic", imuTopic, "/imu");
+    nh.param<std::string>("localization/ndtOdomTopic", ndtOdomTopic, "ndt/current_pose");
+    nh.param<std::string>("localization/imuOdomTopic", imuOdomTopic, "odometry/imu");
 
-        nh.param<float>("localization/imuAccNoise", imuAccNoise, 0.01);
-        nh.param<float>("localization/imuGyrNoise", imuGyrNoise, 0.001);
-        nh.param<float>("localization/imuAccBiasN", imuAccBiasN, 0.0002);
-        nh.param<float>("localization/imuGyrBiasN", imuGyrBiasN, 0.00003);
-        nh.param<float>("localization/imuGravity", imuGravity, 9.80511);
+    nh.param<float>("localization/imuAccNoise", imuAccNoise, 0.01);
+    nh.param<float>("localization/imuGyrNoise", imuGyrNoise, 0.001);
+    nh.param<float>("localization/imuAccBiasN", imuAccBiasN, 0.0002);
+    nh.param<float>("localization/imuGyrBiasN", imuGyrBiasN, 0.00003);
+    nh.param<float>("localization/imuGravity", imuGravity, 9.80511);
 
-        nh.param<vector<double>>("localization/extrinsicRot", extRotV, vector<double>());
-        nh.param<vector<double>>("localization/extrinsicTrans", extTransV, vector<double>());
-        extRot = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extRotV.data(), 3, 3);
-        extTrans = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extTransV.data(), 3, 1);
+    nh.param<vector<double>>("localization/extrinsicRot", extRotV, vector<double>());
+    nh.param<vector<double>>("localization/extrinsicTrans", extTransV, vector<double>());
+    extRot = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extRotV.data(), 3, 3);
+    extTrans = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extTransV.data(), 3, 1);
 
-        imu2Lidar = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(-extTrans.x(), -extTrans.y(), -extTrans.z()));
-        lidar2Imu = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(extTrans.x(), extTrans.y(), extTrans.z()));
+    imu2Lidar = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(-extTrans.x(), -extTrans.y(), -extTrans.z()));
+    lidar2Imu = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(extTrans.x(), extTrans.y(), extTrans.z()));
 
-        subImu      = nh.subscribe<sensor_msgs::Imu>  (imuTopic, 2000, &ImuPreintegration::imuHandler, this, ros::TransportHints().tcpNoDelay());
-        subOdometry = nh.subscribe<nav_msgs::Odometry>(ndtOdomTopic, 5, &ImuPreintegration::odometryHandler, this, ros::TransportHints().tcpNoDelay());
-        pubImuOdometry = nh.advertise<nav_msgs::Odometry> (imuOdomTopic, 2000);
+    subImu      = nh.subscribe<sensor_msgs::Imu>  (imuTopic, 2000, &ImuPreintegration::imuHandler, this, ros::TransportHints().tcpNoDelay());
+    subOdometry = nh.subscribe<nav_msgs::Odometry>(ndtOdomTopic, 5, &ImuPreintegration::odometryHandler, this, ros::TransportHints().tcpNoDelay());
+    pubImuOdometry = nh.advertise<nav_msgs::Odometry> (imuOdomTopic, 2000);
 
-        boost::shared_ptr<gtsam::PreintegrationParams> p = gtsam::PreintegrationParams::MakeSharedU(imuGravity);
-        p->accelerometerCovariance  = gtsam::Matrix33::Identity(3,3) * pow(imuAccNoise, 2); // acc white noise in continuous
-        p->gyroscopeCovariance      = gtsam::Matrix33::Identity(3,3) * pow(imuGyrNoise, 2); // gyro white noise in continuous
-        p->integrationCovariance    = gtsam::Matrix33::Identity(3,3) * pow(1e-4, 2); // error committed in integrating position from velocities
-        gtsam::imuBias::ConstantBias prior_imu_bias((gtsam::Vector(6) << 0, 0, 0, 0, 0, 0).finished());; // assume zero initial bias
+    boost::shared_ptr<gtsam::PreintegrationParams> p = gtsam::PreintegrationParams::MakeSharedU(imuGravity);
+    p->accelerometerCovariance  = gtsam::Matrix33::Identity(3,3) * pow(imuAccNoise, 2); // acc white noise in continuous
+    p->gyroscopeCovariance      = gtsam::Matrix33::Identity(3,3) * pow(imuGyrNoise, 2); // gyro white noise in continuous
+    p->integrationCovariance    = gtsam::Matrix33::Identity(3,3) * pow(1e-4, 2); // error committed in integrating position from velocities
+    gtsam::imuBias::ConstantBias prior_imu_bias((gtsam::Vector(6) << 0, 0, 0, 0, 0, 0).finished());; // assume zero initial bias
 
-        priorPoseNoise  = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(6) << 1e-2, 1e-2, 1e-2, 1e-2, 1e-2, 1e-2).finished()); // rad,rad,rad,m, m, m
-        priorVelNoise   = gtsam::noiseModel::Isotropic::Sigma(3, 1e4); // m/s
-        priorBiasNoise  = gtsam::noiseModel::Isotropic::Sigma(6, 1e-3); // 1e-2 ~ 1e-3 seems to be good
-        correctionNoise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(6) << 0.05, 0.05, 0.05, 0.1, 0.1, 0.1).finished()); // rad,rad,rad,m, m, m
-        correctionNoise2 = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(6) << 1, 1, 1, 1, 1, 1).finished()); // rad,rad,rad,m, m, m
-        noiseModelBetweenBias = (gtsam::Vector(6) << imuAccBiasN, imuAccBiasN, imuAccBiasN, imuGyrBiasN, imuGyrBiasN, imuGyrBiasN).finished();
-        
-        imuIntegratorImu_ = new gtsam::PreintegratedImuMeasurements(p, prior_imu_bias); // setting up the IMU integration for IMU message thread
-        imuIntegratorOpt_ = new gtsam::PreintegratedImuMeasurements(p, prior_imu_bias); // setting up the IMU integration for optimization      
+    priorPoseNoise  = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(6) << 1e-2, 1e-2, 1e-2, 1e-2, 1e-2, 1e-2).finished()); // rad,rad,rad,m, m, m
+    priorVelNoise   = gtsam::noiseModel::Isotropic::Sigma(3, 1e4); // m/s
+    priorBiasNoise  = gtsam::noiseModel::Isotropic::Sigma(6, 1e-3); // 1e-2 ~ 1e-3 seems to be good
+    correctionNoise = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(6) << 0.05, 0.05, 0.05, 0.1, 0.1, 0.1).finished()); // rad,rad,rad,m, m, m
+    correctionNoise2 = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(6) << 1, 1, 1, 1, 1, 1).finished()); // rad,rad,rad,m, m, m
+    noiseModelBetweenBias = (gtsam::Vector(6) << imuAccBiasN, imuAccBiasN, imuAccBiasN, imuGyrBiasN, imuGyrBiasN, imuGyrBiasN).finished();
+    
+    imuIntegratorImu_ = new gtsam::PreintegratedImuMeasurements(p, prior_imu_bias); // setting up the IMU integration for IMU message thread
+    imuIntegratorOpt_ = new gtsam::PreintegratedImuMeasurements(p, prior_imu_bias); // setting up the IMU integration for optimization      
 }
 
 void ImuPreintegration::resetOptimization()

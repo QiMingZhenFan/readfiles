@@ -128,6 +128,7 @@ public:
     
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     ImuPreintegration();
+    ImuPreintegration(bool use_imu);
     void resetOptimization();
     void resetParams();
     void odometryHandler(const nav_msgs::Odometry::ConstPtr& odomMsg);

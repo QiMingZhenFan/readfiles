@@ -5,7 +5,7 @@ project(ndt_imu_localization)
 add_compile_options(-std=c++11)
 set(CMAKE_BUILD_TYPE "Release")
 # pcl filter double free error
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -march=native")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 SET(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g2 -ggdb")
 SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 
@@ -24,6 +24,8 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(GTSAM REQUIRED)
 find_package(PCL REQUIRED)
 set(GTSAM_LIBRARIES gtsam)
+
+add_subdirectory(src/ndt_cpu)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -131,6 +133,7 @@ include_directories(
   include
 	${PCL_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS}
+  src/ndt_cpu/include
 	${GTSAM_INCLUDE_DIR}
 )
 
@@ -170,6 +173,7 @@ target_link_libraries(imuPreintegration
 target_link_libraries(NdtMatching
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
+  ndt_cpu
 )
 
 target_link_libraries(${PROJECT_NAME}_node
