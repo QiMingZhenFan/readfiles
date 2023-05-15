@@ -21,6 +21,7 @@ NdtMatching::NdtMatching(){
     sub_fake_initial_pose_ = nh.subscribe<geometry_msgs::PoseStamped>("/ndt/current_pose_fake", 1, &NdtMatching::FakeInitialPoseHandler, this, ros::TransportHints().tcpNoDelay());
 
     pubNdtOdometry = nh.advertise<nav_msgs::Odometry>(ndtOdomTopic, 2000);
+    pubNdtInitialGuess_ = nh.advertise<nav_msgs::Odometry>("/ndt/initial_guess", 2000);
     pubGlobalMap = nh.advertise<sensor_msgs::PointCloud2>("global_map", 2000);
     pubCurPointCloud = nh.advertise<sensor_msgs::PointCloud2>("cur_pointcloud", 2000);
 
@@ -126,13 +127,14 @@ void NdtMatching::PointCloudHandler(const sensor_msgs::PointCloud2::ConstPtr& po
         }
         else{
             Eigen::Matrix4f temp = initial_value;
-            // initial_value = initial_value * last_value.inverse() * initial_value;
+            initial_value = initial_value * last_value.inverse() * initial_value;
             last_value = temp;
             ROS_DEBUG("In no imu mode!");
         }
     }
 
     static Eigen::Matrix4f output = Eigen::Matrix4f::Identity();
+    Eigen::Matrix4f save_initial_guess = initial_value;
     ndt_.setInputSource(filtered_current_pointcloud);
     pcl::PointCloud<PointType>::Ptr output_cloud(new pcl::PointCloud<PointType>);
     ndt_.align(initial_value);
@@ -141,23 +143,38 @@ void NdtMatching::PointCloudHandler(const sensor_msgs::PointCloud2::ConstPtr& po
     initial_value = output;
 
     // publish ndt odometry
-    nav_msgs::Odometry ndt_odom;
+    nav_msgs::Odometry ndt_initial_guess;
     static unsigned int count = 0;
+    ndt_initial_guess.header.stamp = pointcloud_msg->header.stamp;
+    ndt_initial_guess.header.frame_id = "map";
+    ndt_initial_guess.header.seq = ++count;
+    ndt_initial_guess.pose.pose.position.x = save_initial_guess(0,3);
+    ndt_initial_guess.pose.pose.position.y = save_initial_guess(1,3);
+    ndt_initial_guess.pose.pose.position.z = save_initial_guess(2,3);
+    Eigen::Quaternionf quat_initial_guess(save_initial_guess.block<3, 3>(0, 0));
+    ndt_initial_guess.pose.pose.orientation.w = quat_initial_guess.w();
+    ndt_initial_guess.pose.pose.orientation.x = quat_initial_guess.x();
+    ndt_initial_guess.pose.pose.orientation.y = quat_initial_guess.y();
+    ndt_initial_guess.pose.pose.orientation.z = quat_initial_guess.z();
+    pubNdtInitialGuess_.publish(ndt_initial_guess);
+
+    // publish ndt odometry
+    nav_msgs::Odometry ndt_odom;
     ndt_odom.header.stamp = pointcloud_msg->header.stamp;
     ndt_odom.header.frame_id = "map";
-    ndt_odom.header.seq = count++;
+    ndt_odom.header.seq = count;
     ndt_odom.pose.pose.position.x = output(0,3);
     ndt_odom.pose.pose.position.y = output(1,3);
     ndt_odom.pose.pose.position.z = output(2,3);
-    Eigen::Quaternionf quat(output.block<3, 3>(0, 0));
-    ndt_odom.pose.pose.orientation.w = quat.w();
-    ndt_odom.pose.pose.orientation.x = quat.x();
-    ndt_odom.pose.pose.orientation.y = quat.y();
-    ndt_odom.pose.pose.orientation.z = quat.z();
+    Eigen::Quaternionf quat_odom(output.block<3, 3>(0, 0));
+    ndt_odom.pose.pose.orientation.w = quat_odom.w();
+    ndt_odom.pose.pose.orientation.x = quat_odom.x();
+    ndt_odom.pose.pose.orientation.y = quat_odom.y();
+    ndt_odom.pose.pose.orientation.z = quat_odom.z();
     pubNdtOdometry.publish(ndt_odom);
 
     static tf::TransformBroadcaster broadcaster;
-    tf::Quaternion quad(quat.x(), quat.y(), quat.z(), quat.w());
+    tf::Quaternion quad(quat_odom.x(), quat_odom.y(), quat_odom.z(), quat_odom.w());
     tf::Transform trans;
     trans.setOrigin(tf::Vector3(output(0,3), output(1,3), output(2,3))); 
     trans.setRotation(quad);
@@ -222,3 +239,28 @@ void NdtMatching::LoadGlobalMap(){
         rate.sleep();
     }
 }
+
+/* 
+// haven't finished
+void NdtMatching::WritePoseToFile(const std::string& file_path_name, const std::unordered_map<int, Node>& nodes){
+    // in TUM format
+    std::ofstream outFile(file_path_name, std::ios::out);
+    if(!outFile){
+        ROS_ERROR_STREAM("Cannot write file : " << file_path_name);
+        return;
+    }
+    for(int i = 0; i <nodes.size(); ++i){
+        auto& node = nodes.at(i);
+        outFile << node.time_stamp.toSec()
+                << ' ' << node.opt_pose.position.x()
+                << ' ' << node.opt_pose.position.y()
+                << ' ' << node.opt_pose.position.z()
+                << ' ' << node.opt_pose.rotation.x()
+                << ' ' << node.opt_pose.rotation.y()
+                << ' ' << node.opt_pose.rotation.z()
+                << ' ' << node.opt_pose.rotation.w()
+                << std::endl;
+    }
+    outFile.close();
+}
+*/

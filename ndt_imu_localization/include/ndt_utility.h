@@ -61,6 +61,7 @@ class NdtMatching{
     ros::Subscriber sub_initial_pose_;
     ros::Subscriber sub_fake_initial_pose_;
     ros::Publisher pubNdtOdometry;
+    ros::Publisher pubNdtInitialGuess_;
     ros::Publisher pubGlobalMap;
     ros::Publisher pubCurPointCloud;
 

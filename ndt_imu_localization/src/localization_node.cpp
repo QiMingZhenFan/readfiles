@@ -14,7 +14,8 @@ int main(int argc, char** argv){
     
     ROS_INFO_STREAM("IMU USE STATUS: " << ndt_matching.GetIMUUseFlag() << "??? " << true);
 
-    ImuPreintegration imu_preintegration(ndt_matching.GetIMUUseFlag());
+    // ImuPreintegration imu_preintegration((bool)ndt_matching.GetIMUUseFlag());
+    ImuPreintegration imu_preintegration(true);
 
     ros::MultiThreadedSpinner spinner(4);
     spinner.spin();
