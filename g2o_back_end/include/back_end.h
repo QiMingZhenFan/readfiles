@@ -24,6 +24,7 @@
 #include <pcl/kdtree/kdtree.h> 
 #include <pcl_conversions/pcl_conversions.h>
 #include "pcl/filters/voxel_grid.h"
+#include <pcl/filters/conditional_removal.h>
 
 #include "g2o/config.h"
 #include "g2o/core/block_solver.h"

@@ -9,118 +9,122 @@ const int kMaxIteration = 10;
 const float kPairSelectRadius = 20.0; // m
 const int kSubmapRadius = 5; // frame index
 const double kGnssStdDev = 0.1; 
+const double kFitnessScoreDistance = 2;
+const double kMaxCorrespondenceDistance = 2;
+const double kFitnessScoreThreshold = 2;
+const int kSubmapFramesInterval = 3;
 namespace{
-double distance(geometry_msgs::Point& pos1, geometry_msgs::Point& pos2){
-    double powdis = pow(pos1.x - pos2.x, 2) + pow(pos1.y - pos2.y, 2) + pow(pos1.z - pos2.z, 2); 
-    return pow(powdis, 0.5);
-}
+    double distance(geometry_msgs::Point& pos1, geometry_msgs::Point& pos2){
+        double powdis = pow(pos1.x - pos2.x, 2) + pow(pos1.y - pos2.y, 2) + pow(pos1.z - pos2.z, 2); 
+        return pow(powdis, 0.5);
+    }
 
-// index: the frame closest to target_time, but a little bit early
-// index+1: the frame closest to target_time, but a little bit late
-// return: if have frame newer than target_time
-template<typename P>
-bool FindNearstTwoFrame(const std::vector<P>& msg, double target_time, int& index){
-    for(int i = index; i < msg.size() - 1; ++i){
-        if(msg[i].header.stamp.toSec() <= target_time && target_time < msg[i+1].header.stamp.toSec()){
-            index = i;
-            return true;
+    // index: the frame closest to target_time, but a little bit early
+    // index+1: the frame closest to target_time, but a little bit late
+    // return: if have frame newer than target_time
+    template<typename P>
+    bool FindNearstTwoFrame(const std::vector<P>& msg, double target_time, int& index){
+        for(int i = index; i < msg.size() - 1; ++i){
+            if(msg[i].header.stamp.toSec() <= target_time && target_time < msg[i+1].header.stamp.toSec()){
+                index = i;
+                return true;
+            }
+            if(msg[i].header.stamp.toSec() > target_time){
+                return false;
+            }
         }
-        if(msg[i].header.stamp.toSec() > target_time){
-            return false;
+        // all msgs timestamp < target_time
+        return false;
+    }
+
+    void InterpolateTargetGnss(sensor_msgs::NavSatFix& target, 
+                                const std_msgs::Header& header,
+                                const sensor_msgs::NavSatFix& left,
+                                const sensor_msgs::NavSatFix& right){
+        target = left;
+        target.header.stamp = header.stamp;
+        double ratio = (header.stamp.toSec() - left.header.stamp.toSec()) / 
+                        (right.header.stamp.toSec() - left.header.stamp.toSec());
+        target.latitude += ratio * (right.latitude - left.latitude);
+        target.longitude += ratio * (right.longitude - left.longitude);
+        target.altitude += ratio * (right.altitude - left.altitude);
+    }
+
+    void InterpolateTargetPose(geometry_msgs::PoseStamped& target, 
+                                const std_msgs::Header& header,
+                                const geometry_msgs::PoseStamped& left,
+                                const geometry_msgs::PoseStamped& right){
+        target = left;
+        target.header.stamp = header.stamp;
+        double ratio = (header.stamp.toSec() - left.header.stamp.toSec()) / 
+                        (right.header.stamp.toSec() - left.header.stamp.toSec());
+        auto& vec4l = left.pose.orientation;
+        Eigen::Quaterniond ql(vec4l.w, vec4l.x, vec4l.y, vec4l.z);
+        auto& vec4r = right.pose.orientation;
+        Eigen::Quaterniond qr(vec4r.w, vec4r.x, vec4r.y, vec4r.z); 
+        Eigen::Quaterniond qres = ql.slerp(ratio, qr);
+
+        target.pose.position.x += ratio * (right.pose.position.x - left.pose.position.x);
+        target.pose.position.y += ratio * (right.pose.position.y - left.pose.position.y);
+        target.pose.position.z += ratio * (right.pose.position.z - left.pose.position.z);
+        target.pose.orientation.w = qres.w();
+        target.pose.orientation.x = qres.x();
+        target.pose.orientation.y = qres.y();
+        target.pose.orientation.z = qres.z();
+    }
+
+    void WritePoseToFile(const std::string& file_path_name, const std::unordered_map<int, Node>& nodes){
+        // in TUM format
+        std::ofstream outFile(file_path_name, std::ios::out);
+        if(!outFile){
+            ROS_ERROR_STREAM("Cannot write file : " << file_path_name);
+            return;
         }
+        for(int i = 0; i <nodes.size(); ++i){
+            auto& node = nodes.at(i);
+            outFile << node.time_stamp.toSec()
+                    << ' ' << node.opt_pose.position.x()
+                    << ' ' << node.opt_pose.position.y()
+                    << ' ' << node.opt_pose.position.z()
+                    << ' ' << node.opt_pose.rotation.x()
+                    << ' ' << node.opt_pose.rotation.y()
+                    << ' ' << node.opt_pose.rotation.z()
+                    << ' ' << node.opt_pose.rotation.w()
+                    << std::endl;
+        }
+        outFile.close();
     }
-    // all msgs timestamp < target_time
-    return false;
-}
 
-void InterpolateTargetGnss(sensor_msgs::NavSatFix& target, 
-                            const std_msgs::Header& header,
-                            const sensor_msgs::NavSatFix& left,
-                            const sensor_msgs::NavSatFix& right){
-    target = left;
-    target.header.stamp = header.stamp;
-    double ratio = (header.stamp.toSec() - left.header.stamp.toSec()) / 
-                    (right.header.stamp.toSec() - left.header.stamp.toSec());
-    target.latitude += ratio * (right.latitude - left.latitude);
-    target.longitude += ratio * (right.longitude - left.longitude);
-    target.altitude += ratio * (right.altitude - left.altitude);
-}
+    void WriteFinalPointCloudToPCDFile(const std::string& file_path_name, const std::unordered_map<int, Node>& nodes, bool original){
+        pcl::PointCloud<PointType>::Ptr total_map(new pcl::PointCloud<PointType>());
+        for(const auto& [id, node] : nodes){
+            pcl::PointCloud<PointType>::Ptr temp_map(new pcl::PointCloud<PointType>());
+            if(original)
+                pcl::transformPointCloud(*node.cloud, *temp_map, node.pose.CalcTransformMat());
+            else
+                pcl::transformPointCloud(*node.cloud, *temp_map, node.opt_pose.CalcTransformMat());
+            *total_map += *temp_map;
+        }
+        // downsample
+        ROS_INFO_STREAM("Downsampling, pre points: " << total_map->points.size() << ".");
+        pcl::PointCloud<PointType>::Ptr total_map_downsampled(new pcl::PointCloud<PointType>());
+        double voxel_leaf_size = 0.2;
+        pcl::VoxelGrid<PointType> voxel;
+        voxel.setInputCloud(total_map);
+        voxel.setLeafSize(voxel_leaf_size, voxel_leaf_size, voxel_leaf_size);
+        voxel.filter(*total_map_downsampled);
+        ROS_INFO_STREAM("Downsampled, aft points: " << total_map_downsampled->points.size() << ".");
+        ROS_INFO_STREAM("Saving PCD file...");
 
-void InterpolateTargetPose(geometry_msgs::PoseStamped& target, 
-                            const std_msgs::Header& header,
-                            const geometry_msgs::PoseStamped& left,
-                            const geometry_msgs::PoseStamped& right){
-    target = left;
-    target.header.stamp = header.stamp;
-    double ratio = (header.stamp.toSec() - left.header.stamp.toSec()) / 
-                    (right.header.stamp.toSec() - left.header.stamp.toSec());
-    auto& vec4l = left.pose.orientation;
-    Eigen::Quaterniond ql(vec4l.w, vec4l.x, vec4l.y, vec4l.z);
-    auto& vec4r = right.pose.orientation;
-    Eigen::Quaterniond qr(vec4r.w, vec4r.x, vec4r.y, vec4r.z); 
-    Eigen::Quaterniond qres = ql.slerp(ratio, qr);
-
-    target.pose.position.x += ratio * (right.pose.position.x - left.pose.position.x);
-    target.pose.position.y += ratio * (right.pose.position.y - left.pose.position.y);
-    target.pose.position.z += ratio * (right.pose.position.z - left.pose.position.z);
-    target.pose.orientation.w = qres.w();
-    target.pose.orientation.x = qres.x();
-    target.pose.orientation.y = qres.y();
-    target.pose.orientation.z = qres.z();
-}
-
-void WritePoseToFile(const std::string& file_path_name, const std::unordered_map<int, Node>& nodes){
-    // in TUM format
-    std::ofstream outFile(file_path_name, std::ios::out);
-    if(!outFile){
-        ROS_ERROR_STREAM("Cannot write file : " << file_path_name);
-        return;
+        pcl::io::savePCDFileASCII(file_path_name, *total_map_downsampled);
+        ROS_INFO_STREAM("PCD file saved!");
     }
-    for(int i = 0; i <nodes.size(); ++i){
-        auto& node = nodes.at(i);
-        outFile << node.time_stamp.toSec()
-                << ' ' << node.opt_pose.position.x()
-                << ' ' << node.opt_pose.position.y()
-                << ' ' << node.opt_pose.position.z()
-                << ' ' << node.opt_pose.rotation.x()
-                << ' ' << node.opt_pose.rotation.y()
-                << ' ' << node.opt_pose.rotation.z()
-                << ' ' << node.opt_pose.rotation.w()
-                << std::endl;
-    }
-    outFile.close();
-}
 
-void WriteFinalPointCloudToPCDFile(const std::string& file_path_name, const std::unordered_map<int, Node>& nodes, bool original){
-    pcl::PointCloud<PointType>::Ptr total_map(new pcl::PointCloud<PointType>());
-    for(const auto& [id, node] : nodes){
+    void WriteSubmapPointCloudToPCDFile(const std::string& file_path, const Node& node, int id){
         pcl::PointCloud<PointType>::Ptr temp_map(new pcl::PointCloud<PointType>());
-        if(original)
-            pcl::transformPointCloud(*node.cloud, *temp_map, node.pose.CalcTransformMat());
-        else
-            pcl::transformPointCloud(*node.cloud, *temp_map, node.opt_pose.CalcTransformMat());
-        *total_map += *temp_map;
+        pcl::transformPointCloud(*node.cloud, *temp_map, node.pose.CalcTransformMat());
+        pcl::io::savePCDFileASCII(file_path + std::to_string(id) + ".pcd", *(node.cloud));
     }
-    // downsample
-    ROS_INFO_STREAM("Downsampling, pre points: " << total_map->points.size() << ".");
-    pcl::PointCloud<PointType>::Ptr total_map_downsampled(new pcl::PointCloud<PointType>());
-    double voxel_leaf_size = 0.2;
-    pcl::VoxelGrid<PointType> voxel;
-    voxel.setInputCloud(total_map);
-    voxel.setLeafSize(voxel_leaf_size, voxel_leaf_size, voxel_leaf_size);
-    voxel.filter(*total_map_downsampled);
-    ROS_INFO_STREAM("Downsampled, aft points: " << total_map_downsampled->points.size() << ".");
-    ROS_INFO_STREAM("Saving PCD file...");
-
-    pcl::io::savePCDFileASCII(file_path_name, *total_map_downsampled);
-    ROS_INFO_STREAM("PCD file saved!");
-}
-
-void WriteSubmapPointCloudToPCDFile(const std::string& file_path, const Node& node, int id){
-    pcl::PointCloud<PointType>::Ptr temp_map(new pcl::PointCloud<PointType>());
-    pcl::transformPointCloud(*node.cloud, *temp_map, node.pose.CalcTransformMat());
-    pcl::io::savePCDFileASCII(file_path + std::to_string(id) + ".pcd", *(node.cloud));
-}
 } // namespace
 
 
@@ -189,39 +193,36 @@ void BackEnd::ReadDataFromBag(std::vector<sensor_msgs::PointCloud2>& point_cloud
 
     // TODO: wonder if this method make sure datas follow the timing order
     for(const rosbag::MessageInstance& m:view){
-    if (m.getTopic() == param_lidar_topic_ || ("/" + m.getTopic() == param_lidar_topic_))
-    {
-    sensor_msgs::PointCloud2::Ptr message = m.instantiate<sensor_msgs::PointCloud2>();
-    if (message != NULL)
-    point_clouds.emplace_back(*message);
-    }
-    if (m.getTopic() == param_pose_topic_ || ("/" + m.getTopic() == param_pose_topic_))
-    {
-    // TODO: determine which kind of message to use here
-    geometry_msgs::PoseStamped::Ptr message0 = m.instantiate<geometry_msgs::PoseStamped>();
-    if (message0 != NULL){
-    odometry_poses.emplace_back(*message0);
-    continue;
-    }
-    nav_msgs::Odometry::Ptr message1 = m.instantiate<nav_msgs::Odometry>();
-    if (message1 != NULL){
-    odometry_poses.emplace_back();
-    auto& cur_posestamped = odometry_poses.back();
-    cur_posestamped.header = message1->header;
-    cur_posestamped.pose = message1->pose.pose;
-    continue;
-    }
-    }
-    if (m.getTopic() == param_gnss_topic_ || ("/" + m.getTopic() == param_gnss_topic_))
-    {
-    sensor_msgs::NavSatFix::Ptr message = m.instantiate<sensor_msgs::NavSatFix>();
-    if (message != NULL){
-    gnss.emplace_back(*message);
-    }
-    }
+        if (m.getTopic() == param_lidar_topic_ || ("/" + m.getTopic() == param_lidar_topic_)){
+            sensor_msgs::PointCloud2::Ptr message = m.instantiate<sensor_msgs::PointCloud2>();
+            if (message != NULL)
+                point_clouds.emplace_back(*message);
+        }
+        if (m.getTopic() == param_pose_topic_ || ("/" + m.getTopic() == param_pose_topic_)){
+            // TODO: determine which kind of message to use here
+            geometry_msgs::PoseStamped::Ptr message0 = m.instantiate<geometry_msgs::PoseStamped>();
+            if (message0 != NULL){
+                odometry_poses.emplace_back(*message0);
+                continue;
+            }
+            nav_msgs::Odometry::Ptr message1 = m.instantiate<nav_msgs::Odometry>();
+            if (message1 != NULL){
+                odometry_poses.emplace_back();
+                auto& cur_posestamped = odometry_poses.back();
+                cur_posestamped.header = message1->header;
+                cur_posestamped.pose = message1->pose.pose;
+                continue;
+            }
+        }
+        if (m.getTopic() == param_gnss_topic_ || ("/" + m.getTopic() == param_gnss_topic_)){
+            sensor_msgs::NavSatFix::Ptr message = m.instantiate<sensor_msgs::NavSatFix>();
+            if (message != NULL){
+                gnss.emplace_back(*message);
+            }
+        }
     }
     bag.close();
-    }
+}
 
 void BackEnd::AlignTimeStamp(std::vector<sensor_msgs::PointCloud2>& point_clouds,
                                 std::vector<sensor_msgs::NavSatFix>& gnss,
@@ -289,14 +290,14 @@ void BackEnd::CollectData(){
     else
         assert(point_clouds_.size() == odometry_poses_.size());    
 
-    auto ConstructSubmap = [this](int left, int mid, int right, Node& node){
+    auto ConstructSubmap = [this](int left, int mid, int right, Node& node, const int interval){
         left = left < 0? 0: left;
         right = right > point_clouds_.size()-1? point_clouds_.size()-1: right;
         Eigen::Transform<double,3,Eigen::Isometry>  trans_mid = node.pose.position * node.pose.rotation;
         pcl::fromROSMsg(point_clouds_[mid], *node.cloud);
-        for(int i = left; i <= right; ++i){
+        Eigen::Transform<double,3,Eigen::Isometry>  trans_mid_cur(Eigen::Matrix4d::Identity());
+        for(int i = left; i <= right; i+=interval){
             if(i == mid){
-                continue;
             }
             else{
                 Eigen::Transform<double,3,Eigen::Isometry>  trans_cur;
@@ -307,12 +308,27 @@ void BackEnd::CollectData(){
                                                                         odometry_poses_[i].pose.orientation.x,
                                                                         odometry_poses_[i].pose.orientation.y,
                                                                         odometry_poses_[i].pose.orientation.z).toRotationMatrix();
-                Eigen::Transform<double,3,Eigen::Isometry>  trans_mid_cur = trans_mid.inverse() * trans_cur;
-                pcl::PointCloud<PointType> point_cloud_cur;
-                pcl::fromROSMsg(point_clouds_[i], point_cloud_cur);
-                pcl::transformPointCloud(point_cloud_cur, point_cloud_cur, trans_mid_cur.matrix().cast<float>());
-                *node.cloud += point_cloud_cur;
+                trans_mid_cur = trans_mid.inverse() * trans_cur;
             }
+            pcl::PointCloud<PointType>::Ptr point_cloud_cur_ptr(new pcl::PointCloud<PointType>);
+            pcl::fromROSMsg(point_clouds_[i], *point_cloud_cur_ptr);
+            pcl::transformPointCloud(*point_cloud_cur_ptr, *point_cloud_cur_ptr, trans_mid_cur.matrix().cast<float>());
+
+            // limit pointcloud range
+            pcl::ConditionAnd<PointType>::Ptr condition(new pcl::ConditionAnd<PointType>);
+            condition->addComparison(pcl::FieldComparison<PointType>::ConstPtr(new pcl::FieldComparison<PointType>("x", pcl::ComparisonOps::GT, 5.0)));
+            condition->addComparison(pcl::FieldComparison<PointType>::ConstPtr(new pcl::FieldComparison<PointType>("x", pcl::ComparisonOps::LT, 50.0)));
+            condition->addComparison(pcl::FieldComparison<PointType>::ConstPtr(new pcl::FieldComparison<PointType>("y", pcl::ComparisonOps::GT, 5.0)));
+            condition->addComparison(pcl::FieldComparison<PointType>::ConstPtr(new pcl::FieldComparison<PointType>("y", pcl::ComparisonOps::LT, 50.0)));
+
+            pcl::ConditionalRemoval<PointType> condrem;
+            pcl::PointCloud<PointType>::Ptr point_cloud_cur_ptr_filtered(new pcl::PointCloud<PointType>);
+
+            condrem.setInputCloud(point_cloud_cur_ptr);
+            condrem.setCondition(condition);
+            condrem.filter(*point_cloud_cur_ptr_filtered);
+
+            *node.cloud += *point_cloud_cur_ptr_filtered;
         }
     };
 
@@ -342,7 +358,7 @@ void BackEnd::CollectData(){
             }
 
             // 4. fill cloud
-            ConstructSubmap(i - kSubmapRadius, i, i + kSubmapRadius, temp_node);
+            ConstructSubmap(i - kSubmapRadius, i, i + kSubmapRadius, temp_node, kSubmapFramesInterval);
             pcl::PointCloud<PointType>::Ptr cloud_filtered(new pcl::PointCloud<PointType>());
             double voxel_leaf_size = 0.2;
             pcl::VoxelGrid<PointType> voxel;
@@ -429,16 +445,22 @@ void BackEnd::PairMatching(const int node1_id, const int node2_id){
     // ros::WallTime bef = ros::WallTime::now();
     // ROS_INFO_STREAM("start icp matching.");
     pcl::GeneralizedIterativeClosestPoint<PointType, PointType> gicp;
+
+    gicp.setMaxCorrespondenceDistance(kMaxCorrespondenceDistance);
+    gicp.setMaximumIterations(kMaxIteration);
+    gicp.setTransformationEpsilon(1e-6);
+    gicp.setEuclideanFitnessEpsilon(1e-6);
+    gicp.setRANSACIterations(10);
+
     gicp.setInputSource(src_cloud);
     gicp.setInputTarget(tar_cloud);
-    gicp.setMaximumIterations(kMaxIteration);
     gicp.align(aligned_cloud, delta_trans.matrix().cast<float>());
     // ros::WallTime aft = ros::WallTime::now();
     // ROS_INFO_STREAM("icp consume time:" <<  (aft - bef).toSec() << ".");
 
     // TODO: add more metrics to judge the outcome
     // add constarints here
-    if(gicp.hasConverged() && gicp.getFitnessScore() < 2){
+    if(gicp.hasConverged() && gicp.getFitnessScore(kFitnessScoreDistance) < kFitnessScoreThreshold){
         Constraint temp;
         temp.transform_1_2 = gicp.getFinalTransformation();
         temp.node1_id = node1.index;
