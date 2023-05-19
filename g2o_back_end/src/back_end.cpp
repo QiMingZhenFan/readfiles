@@ -7,12 +7,14 @@ namespace back_end{
 
 const int kMaxIteration = 10;
 const float kPairSelectRadius = 20.0; // m
-const int kSubmapRadius = 5; // frame index
+const int kSubmapIndexRadius = 10; // m
 const double kGnssStdDev = 0.1; 
 const double kFitnessScoreDistance = 2;
-const double kMaxCorrespondenceDistance = 2;
-const double kFitnessScoreThreshold = 2;
+const double kMaxCorrespondenceDistance = 0.8;
+const double kFitnessScoreThreshold = 0.2;
 const int kSubmapFramesInterval = 3;
+const std::string kworking_folder = "/code/maps/";
+
 namespace{
     double distance(geometry_msgs::Point& pos1, geometry_msgs::Point& pos2){
         double powdis = pow(pos1.x - pos2.x, 2) + pow(pos1.y - pos2.y, 2) + pow(pos1.z - pos2.z, 2); 
@@ -108,7 +110,7 @@ namespace{
         // downsample
         ROS_INFO_STREAM("Downsampling, pre points: " << total_map->points.size() << ".");
         pcl::PointCloud<PointType>::Ptr total_map_downsampled(new pcl::PointCloud<PointType>());
-        double voxel_leaf_size = 0.2;
+        double voxel_leaf_size = 0.35;
         pcl::VoxelGrid<PointType> voxel;
         voxel.setInputCloud(total_map);
         voxel.setLeafSize(voxel_leaf_size, voxel_leaf_size, voxel_leaf_size);
@@ -123,7 +125,7 @@ namespace{
     void WriteSubmapPointCloudToPCDFile(const std::string& file_path, const Node& node, int id){
         pcl::PointCloud<PointType>::Ptr temp_map(new pcl::PointCloud<PointType>());
         pcl::transformPointCloud(*node.cloud, *temp_map, node.pose.CalcTransformMat());
-        pcl::io::savePCDFileASCII(file_path + std::to_string(id) + ".pcd", *(node.cloud));
+        pcl::io::savePCDFileASCII(file_path + std::to_string(id) + ".pcd", *temp_map);
     }
 } // namespace
 
@@ -133,8 +135,19 @@ void BackEnd::Init(){
     param_use_gnss_ = false;
     lidar_frame_nums_ = 0;
     node_nums_ = 0;
-    param_output_file_path = "/tmp/opt_pose.csv";
-    param_output_pcdfile_path = "/tmp/total_map.pcd";
+    param_output_file_path = kworking_folder + "opt_pose.csv";
+    param_output_pcdfile_path = kworking_folder + "total_map.pcd";
+
+    ROS_INFO_STREAM("kMaxIteration: " << kMaxIteration);
+    ROS_INFO_STREAM("kPairSelectRadius: " << kPairSelectRadius);
+    ROS_INFO_STREAM("kSubmapIndexRadius: " << kSubmapIndexRadius);
+    ROS_INFO_STREAM("kGnssStdDev: " << kGnssStdDev);
+    ROS_INFO_STREAM("kFitnessScoreDistance: " << kFitnessScoreDistance);
+    ROS_INFO_STREAM("kMaxCorrespondenceDistance: " << kMaxCorrespondenceDistance);
+    ROS_INFO_STREAM("kFitnessScoreThreshold: " << kFitnessScoreThreshold);
+    ROS_INFO_STREAM("kSubmapFramesInterval: " << kSubmapFramesInterval);
+    ROS_INFO_STREAM("param_output_pcdfile_path: " << param_output_pcdfile_path);
+    ROS_INFO_STREAM("param_output_file_path: " << param_output_file_path);
 
     // check if topic is empty
     if(param_gnss_topic_.empty() || param_pose_topic_.empty() || param_lidar_topic_.empty()){
@@ -294,7 +307,7 @@ void BackEnd::CollectData(){
         left = left < 0? 0: left;
         right = right > point_clouds_.size()-1? point_clouds_.size()-1: right;
         Eigen::Transform<double,3,Eigen::Isometry>  trans_mid = node.pose.position * node.pose.rotation;
-        pcl::fromROSMsg(point_clouds_[mid], *node.cloud);
+        // pcl::fromROSMsg(point_clouds_[mid], *node.cloud);
         Eigen::Transform<double,3,Eigen::Isometry>  trans_mid_cur(Eigen::Matrix4d::Identity());
         for(int i = left; i <= right; i+=interval){
             if(i == mid){
@@ -315,68 +328,99 @@ void BackEnd::CollectData(){
             pcl::transformPointCloud(*point_cloud_cur_ptr, *point_cloud_cur_ptr, trans_mid_cur.matrix().cast<float>());
 
             // limit pointcloud range
-            pcl::ConditionAnd<PointType>::Ptr condition(new pcl::ConditionAnd<PointType>);
-            condition->addComparison(pcl::FieldComparison<PointType>::ConstPtr(new pcl::FieldComparison<PointType>("x", pcl::ComparisonOps::GT, 5.0)));
-            condition->addComparison(pcl::FieldComparison<PointType>::ConstPtr(new pcl::FieldComparison<PointType>("x", pcl::ComparisonOps::LT, 50.0)));
-            condition->addComparison(pcl::FieldComparison<PointType>::ConstPtr(new pcl::FieldComparison<PointType>("y", pcl::ComparisonOps::GT, 5.0)));
-            condition->addComparison(pcl::FieldComparison<PointType>::ConstPtr(new pcl::FieldComparison<PointType>("y", pcl::ComparisonOps::LT, 50.0)));
-
+            pcl::ConditionAnd<PointType>::Ptr condition_and(new pcl::ConditionAnd<PointType>);
             pcl::ConditionalRemoval<PointType> condrem;
             pcl::PointCloud<PointType>::Ptr point_cloud_cur_ptr_filtered(new pcl::PointCloud<PointType>);
+            
+            // |x| < 50  |y| < 50
+            condition_and->addComparison(pcl::FieldComparison<PointType>::ConstPtr(new pcl::FieldComparison<PointType>("x", pcl::ComparisonOps::GT, -50.0)));
+            condition_and->addComparison(pcl::FieldComparison<PointType>::ConstPtr(new pcl::FieldComparison<PointType>("x", pcl::ComparisonOps::LT, 50.0)));
+            condition_and->addComparison(pcl::FieldComparison<PointType>::ConstPtr(new pcl::FieldComparison<PointType>("y", pcl::ComparisonOps::GT, -50.0)));
+            condition_and->addComparison(pcl::FieldComparison<PointType>::ConstPtr(new pcl::FieldComparison<PointType>("y", pcl::ComparisonOps::LT, 50.0)));
+            condrem.setInputCloud(point_cloud_cur_ptr);
+            // condrem.setKeepOrganized(true);
+            condrem.setCondition(condition_and);
+            condrem.filter(*point_cloud_cur_ptr_filtered);
+
+            // |x| > 5  |y| > 5
+            point_cloud_cur_ptr.swap(point_cloud_cur_ptr_filtered);
+            pcl::ConditionOr<PointType>::Ptr condition_or(new pcl::ConditionOr<PointType>());
+            condition_or->addComparison(pcl::FieldComparison<PointType>::ConstPtr(new pcl::FieldComparison<PointType>("x", pcl::ComparisonOps::GT, 5.0)));
+            condition_or->addComparison(pcl::FieldComparison<PointType>::ConstPtr(new pcl::FieldComparison<PointType>("x", pcl::ComparisonOps::LT, -5.0)));
+            condition_or->addComparison(pcl::FieldComparison<PointType>::ConstPtr(new pcl::FieldComparison<PointType>("y", pcl::ComparisonOps::GT, 5.0)));
+            condition_or->addComparison(pcl::FieldComparison<PointType>::ConstPtr(new pcl::FieldComparison<PointType>("y", pcl::ComparisonOps::LT, -5.0)));
 
             condrem.setInputCloud(point_cloud_cur_ptr);
-            condrem.setCondition(condition);
+            // condrem.setKeepOrganized(true);
+            condrem.setCondition(condition_or);
             condrem.filter(*point_cloud_cur_ptr_filtered);
 
             *node.cloud += *point_cloud_cur_ptr_filtered;
         }
     };
 
+    // find how many keyframes should be constructed 
+    std::unordered_map<int, int> mp_keyframe_index_pointcloud_index;
     for(int i = 0; i < point_clouds_.size(); ++i){
-        // TODO: only sample in index space here, should take distance and time interval into account
-        if(i != 0 && i % kSubmapRadius == 0){
-            // 1. construct nodes here
+        static geometry_msgs::Point position_last = odometry_poses_[0].pose.position;
+        if(i == 0)
+            continue;
+        geometry_msgs::Point position_cur = odometry_poses_[i].pose.position;
+        if(distance(position_last, position_cur) > 5){
+            // we construct one node if the distance is more than 5 meters
+            // 1. fill nodes here
             int node_index = nodes.size();
             nodes[node_index] = Node(node_index, point_clouds_[i].header.stamp);
-            auto& temp_node = nodes[node_index];
-            // 2. fill pose
-            temp_node.pose.position.translation() << odometry_poses_[i].pose.position.x, 
-                                                    odometry_poses_[i].pose.position.y,
-                                                    odometry_poses_[i].pose.position.z;
-            temp_node.pose.rotation = Eigen::Quaterniond(odometry_poses_[i].pose.orientation.w,
-                                                        odometry_poses_[i].pose.orientation.x,
-                                                        odometry_poses_[i].pose.orientation.y,
-                                                        odometry_poses_[i].pose.orientation.z);
-            // 3. fill gnss pose and information
-            // change gps readings in wsg84 to utm
-            if(param_use_gnss_){
-                geographic_msgs::GeoPoint geo_point = geodesy::toMsg(gnss_[i]);
-                geodesy::UTMPoint utm;
-                geodesy::fromMsg(geo_point, utm);
-                temp_node.gnss_pose.position.translation() << utm.easting, utm.northing, utm.altitude;
-                temp_node.gnss_information = Eigen::Matrix6d::Identity() * (1 / kGnssStdDev);
-            }
+            mp_keyframe_index_pointcloud_index[node_index] = i;
+            position_last = position_cur;
+        }
+    }
+    ROS_INFO_STREAM("Total frames num: " << nodes.size());
 
-            // 4. fill cloud
-            ConstructSubmap(i - kSubmapRadius, i, i + kSubmapRadius, temp_node, kSubmapFramesInterval);
-            pcl::PointCloud<PointType>::Ptr cloud_filtered(new pcl::PointCloud<PointType>());
-            double voxel_leaf_size = 0.2;
-            pcl::VoxelGrid<PointType> voxel;
-            voxel.setInputCloud(temp_node.cloud);
-            voxel.setLeafSize(voxel_leaf_size, voxel_leaf_size, voxel_leaf_size);
-            voxel.filter(*cloud_filtered);
-            temp_node.cloud = cloud_filtered;
+    # pragma omp parallel for schedule(dynamic)
+    for(int i = 0; i < nodes.size(); ++i){
+        auto& temp_node = nodes[i];
+        int pointcloud_index = mp_keyframe_index_pointcloud_index[i];
+        // 2. fill pose
+        temp_node.pose.position.translation() << odometry_poses_[pointcloud_index].pose.position.x, 
+                                                odometry_poses_[pointcloud_index].pose.position.y,
+                                                odometry_poses_[pointcloud_index].pose.position.z;
+        temp_node.pose.rotation = Eigen::Quaterniond(odometry_poses_[pointcloud_index].pose.orientation.w,
+                                                    odometry_poses_[pointcloud_index].pose.orientation.x,
+                                                    odometry_poses_[pointcloud_index].pose.orientation.y,
+                                                    odometry_poses_[pointcloud_index].pose.orientation.z);
+        // 3. fill gnss pose and information
+        // change gps readings in wsg84 to utm
+        if(param_use_gnss_){
+            geographic_msgs::GeoPoint geo_point = geodesy::toMsg(gnss_[pointcloud_index]);
+            geodesy::UTMPoint utm;
+            geodesy::fromMsg(geo_point, utm);
+            temp_node.gnss_pose.position.translation() << utm.easting, utm.northing, utm.altitude;
+            temp_node.gnss_information = Eigen::Matrix6d::Identity() * (1 / kGnssStdDev);
+        }
 
+        // 4. fill cloud
+        ConstructSubmap(pointcloud_index - kSubmapIndexRadius, pointcloud_index, pointcloud_index + kSubmapIndexRadius, temp_node, kSubmapFramesInterval);
+        pcl::PointCloud<PointType>::Ptr cloud_filtered(new pcl::PointCloud<PointType>());
+        double voxel_leaf_size = 0.2;
+        pcl::VoxelGrid<PointType> voxel;
+        voxel.setInputCloud(temp_node.cloud);
+        voxel.setLeafSize(voxel_leaf_size, voxel_leaf_size, voxel_leaf_size);
+        voxel.filter(*cloud_filtered);
+        temp_node.cloud = cloud_filtered;
+
+        WriteSubmapPointCloudToPCDFile(kworking_folder, temp_node, i);
+        # pragma omp critical
+        {
             // 5. put node pose into pose_cloud for kdTree find KNN
             pcl::PointXYZI pose_point;
             pose_point.x = temp_node.pose.position.translation().x();
             pose_point.y = temp_node.pose.position.translation().y();
             pose_point.z = temp_node.pose.position.translation().z();
-            pose_point.intensity = node_index;
+            pose_point.intensity = i;
             pose_cloud->push_back(pose_point);
-
-            WriteSubmapPointCloudToPCDFile("/code/maps/", temp_node, node_index);
-            ROS_INFO_STREAM("in constructing submap, node id: " << node_index  << ", submap points: " << temp_node.cloud->size());
+        
+            ROS_INFO_STREAM("in constructing submap, node id: " << i  << ", submap points: " << temp_node.cloud->size());
         }
     }
 
@@ -465,7 +509,7 @@ void BackEnd::PairMatching(const int node1_id, const int node2_id){
         temp.transform_1_2 = gicp.getFinalTransformation();
         temp.node1_id = node1.index;
         temp.node2_id = node2.index;
-        temp.fitness_score = gicp.getFitnessScore();
+        temp.fitness_score = gicp.getFitnessScore(kFitnessScoreDistance);
         # pragma omp critical
         {
             constraints[node1.index][node2.index] = temp;
@@ -477,7 +521,7 @@ void BackEnd::PairMatching(const int node1_id, const int node2_id){
     # pragma omp critical
     {
         ROS_WARN_STREAM("reject this pair: " << node1.index << " <---> " << node2.index <<
-                        " with fitness score: " << gicp.getFitnessScore() <<".");
+                        " with fitness score: " << gicp.getFitnessScore(kFitnessScoreDistance) <<".");
     }
 }
 
@@ -591,7 +635,6 @@ void BackEnd::Run(){
     
     ROS_INFO("**************  finish optimization  **************");
     // write optimized pose into Node struct
-    WriteFinalPointCloudToPCDFile("/tmp/orig_map.pcd", nodes, true);
     for(auto& [id, node] : nodes){
         double xyzqxyzw[7];
         vertices[id]->getEstimateData(xyzqxyzw);
@@ -602,6 +645,7 @@ void BackEnd::Run(){
     ROS_INFO("**************  write data  **************");
     ROS_INFO_STREAM("write data to: " << param_output_file_path);
     WritePoseToFile(param_output_file_path, nodes);
+    WriteFinalPointCloudToPCDFile(kworking_folder+"orig_map.pcd", nodes, true);
     WriteFinalPointCloudToPCDFile(param_output_pcdfile_path, nodes, false);
     ros::WallTime aft(ros::WallTime::now());
     ROS_INFO_STREAM("total time consuming: " << (aft - bef).toSec() << "s.");

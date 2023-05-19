@@ -3,17 +3,21 @@
     <arg name="project" default="g2o_back_end"/>
 
     <!-- <param name="bag_path"       type="string" value="/code/lidar-gnss-odoe-odot.bag" /> -->
-    <param name="bag_path"       type="string" value="/code/yunle_mid_fast_lio.bag" />
+    <!-- <param name="bag_path"       type="string" value="/code/yunle_mid_fast_lio.bag" /> -->
+    <!-- <param name="bag_path"       type="string" value="/code/airport-fast-lio.bag" /> -->
+    <param name="bag_path"       type="string" value="/code/airport-lio-sam.bag" />
+    
     <!-- <param name="lidar_topic"    type="string" value="/carla/ego_vehicle/lidar" /> -->
     <param name="lidar_topic"    type="string" value="/carla/lidar1/point_cloud" />
-    <param name="pose_topic"     type="string" value="/Odometry" />
+    <!-- <param name="pose_topic"     type="string" value="/Odometry" /> -->
+    <param name="pose_topic"     type="string" value="/lio_sam/mapping/odometry" />
     <param name="gnss_topic"     type="string" value="/carla/gnss1/gnss" />
     <!-- <param name="gnss_topic"     type="string" value="/carla/ego_vehicle/gnss" /> -->
 
 
     <!--- Run mapping-->
     <!-- <node pkg="$(arg project)" type="$(arg project)_node"   name="$(arg project)_node"    output="screen" 	respawn="false" launch-prefix="xterm -e gdb -ex run "/> -->
-    <node pkg="$(arg project)" type="$(arg project)_node"   name="$(arg project)_node"    output="screen" 	respawn="false"/>
+    <node pkg="$(arg project)" type="$(arg project)_node"   name="$(arg project)_node"    output="screen" 	respawn="false"  required="true"/>
 
 
 

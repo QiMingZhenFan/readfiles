@@ -32,6 +32,7 @@ int main(int argc, char** argv){
 
     back_end::BackEnd backend_g2o(bag_path, lidar_topic, pose_topic, gnss_topic);
     backend_g2o.Run();
-    ros::MultiThreadedSpinner spinner(4);
-    spinner.spin();
+    // ros::MultiThreadedSpinner spinner(4);
+    // spinner.spin();
+    ros::shutdown();
 }
