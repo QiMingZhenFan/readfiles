@@ -24,13 +24,15 @@ int main(int argc, char** argv){
     std::string lidar_topic;
     std::string pose_topic;
     std::string gnss_topic;
+    std::string gt_pose_topic;
 
     nh.param<std::string>("bag_path", bag_path, "");
     nh.param<std::string>("lidar_topic", lidar_topic, "");
     nh.param<std::string>("pose_topic", pose_topic, "");
     nh.param<std::string>("gnss_topic", gnss_topic, "");
+    nh.param<std::string>("gt_pose_topic", gt_pose_topic, "");
 
-    back_end::BackEnd backend_g2o(bag_path, lidar_topic, pose_topic, gnss_topic);
+    back_end::BackEnd backend_g2o(bag_path, lidar_topic, pose_topic, gnss_topic, gt_pose_topic);
     backend_g2o.Run();
     // ros::MultiThreadedSpinner spinner(4);
     // spinner.spin();

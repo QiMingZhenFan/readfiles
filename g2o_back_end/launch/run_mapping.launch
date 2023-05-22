@@ -9,11 +9,14 @@
     
     <!-- <param name="lidar_topic"    type="string" value="/carla/ego_vehicle/lidar" /> -->
     <param name="lidar_topic"    type="string" value="/carla/lidar1/point_cloud" />
+
     <!-- <param name="pose_topic"     type="string" value="/Odometry" /> -->
     <param name="pose_topic"     type="string" value="/lio_sam/mapping/odometry" />
+    
     <param name="gnss_topic"     type="string" value="/carla/gnss1/gnss" />
     <!-- <param name="gnss_topic"     type="string" value="/carla/ego_vehicle/gnss" /> -->
 
+    <param name="gt_pose_topic"     type="string" value="/ndt/current_pose_fake" />
 
     <!--- Run mapping-->
     <!-- <node pkg="$(arg project)" type="$(arg project)_node"   name="$(arg project)_node"    output="screen" 	respawn="false" launch-prefix="xterm -e gdb -ex run "/> -->

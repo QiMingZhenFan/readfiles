@@ -102,7 +102,7 @@ struct Node{
     int index;
     ros::Time time_stamp;
     pcl::PointCloud<PointType>::Ptr cloud;
-    struct Pose pose, gnss_pose, opt_pose;
+    struct Pose pose, gnss_pose, opt_pose, gt_pose;
     Eigen::Matrix6d gnss_information;
     Node() {
         cloud.reset(new pcl::PointCloud<PointType>());
@@ -125,10 +125,11 @@ class BackEnd{
     public:
     BackEnd();
     BackEnd(std::string bag_full_path, std::string lidar_topic, 
-                        std::string pose_topic, std::string gnss_topic = "None") : 
+                        std::string pose_topic, std::string gnss_topic = "None", std::string gt_pose_topic = "None") : 
                         param_bag_full_path_(bag_full_path),
                         param_lidar_topic_(lidar_topic),
                         param_pose_topic_(pose_topic),
+                        param_gt_pose_topic_(gt_pose_topic),
                         param_gnss_topic_(gnss_topic) {};
     BackEnd(const BackEnd&) = delete;
     BackEnd& operator=(const BackEnd&) = delete;
@@ -136,10 +137,12 @@ class BackEnd{
     void Init();
     void ReadDataFromBag(std::vector<sensor_msgs::PointCloud2>& point_clouds,
                                                         std::vector<sensor_msgs::NavSatFix>& gnss,
-                                                        std::vector<geometry_msgs::PoseStamped>& odometry_poses);
+                                                        std::vector<geometry_msgs::PoseStamped>& odometry_poses,
+                                                        std::vector<geometry_msgs::PoseStamped>& gt_odometry_poses);
     void AlignTimeStamp(std::vector<sensor_msgs::PointCloud2>& point_clouds,
                                                     std::vector<sensor_msgs::NavSatFix>& gnss,
-                                                    std::vector<geometry_msgs::PoseStamped>& odometry_poses);
+                                                    std::vector<geometry_msgs::PoseStamped>& odometry_poses,
+                                                    std::vector<geometry_msgs::PoseStamped>& gt_odometry_poses);
     void CollectData(); 
     bool AddPair(const int node1_id, const int node2_id);
     void DividePairs();
@@ -151,10 +154,12 @@ class BackEnd{
     int lidar_frame_nums_;
     int node_nums_; // should equal to lidar frames, if no key frame selected strategy
     bool param_use_robust_kernel_;
+    bool align_gt_poses_;
     bool param_use_gnss_;
     const std::string param_bag_full_path_;
     const std::string param_lidar_topic_;
     const std::string param_pose_topic_;
+    const std::string param_gt_pose_topic_;
     const std::string param_gnss_topic_;
     std::string param_output_file_path;
     std::string param_output_pcdfile_path;
@@ -170,6 +175,7 @@ class BackEnd{
     std::vector<sensor_msgs::PointCloud2> point_clouds_;
     std::vector<sensor_msgs::NavSatFix> gnss_;
     std::vector<geometry_msgs::PoseStamped> odometry_poses_;
+    std::vector<geometry_msgs::PoseStamped> gt_poses_;
 
     std::unordered_map<int, g2o::VertexSE3*> vertices;
     std::vector<g2o::EdgeSE3*> edges;

@@ -6,12 +6,12 @@
 namespace back_end{
 
 const int kMaxIteration = 10;
-const float kPairSelectRadius = 20.0; // m
+const float kPairSelectRadius = 30.0; // m
 const int kSubmapIndexRadius = 10; // m
 const double kGnssStdDev = 0.1; 
 const double kFitnessScoreDistance = 2;
-const double kMaxCorrespondenceDistance = 0.8;
-const double kFitnessScoreThreshold = 0.2;
+const double kMaxCorrespondenceDistance = 0.5;
+const double kFitnessScoreThreshold = 0.15;
 const int kSubmapFramesInterval = 3;
 const std::string kworking_folder = "/code/maps/";
 
@@ -75,16 +75,21 @@ namespace{
         target.pose.orientation.z = qres.z();
     }
 
-    void WritePoseToFile(const std::string& file_path_name, const std::unordered_map<int, Node>& nodes){
+    void WritePoseToFile(const std::string& file_path, const std::unordered_map<int, Node>& nodes, bool output_gt_pose){
         // in TUM format
-        std::ofstream outFile(file_path_name, std::ios::out);
-        if(!outFile){
-            ROS_ERROR_STREAM("Cannot write file : " << file_path_name);
+        std::ofstream outFile_opt(file_path + "opt_pose.csv", std::ios::out);
+        if(!outFile_opt){
+            ROS_ERROR_STREAM("Cannot write file : " << file_path + "opt_pose.csv");
             return;
         }
-        for(int i = 0; i <nodes.size(); ++i){
-            auto& node = nodes.at(i);
-            outFile << node.time_stamp.toSec()
+        std::ofstream outFile_orig(file_path + "orig_pose.csv", std::ios::out);
+        if(!outFile_orig){
+            ROS_ERROR_STREAM("Cannot write file : " << file_path + "orig_pose.csv");
+            return;
+        }
+        for(int i = 0; i < nodes.size(); ++i){
+            const auto& node = nodes.at(i);
+            outFile_opt << node.time_stamp.toSec()
                     << ' ' << node.opt_pose.position.x()
                     << ' ' << node.opt_pose.position.y()
                     << ' ' << node.opt_pose.position.z()
@@ -92,6 +97,59 @@ namespace{
                     << ' ' << node.opt_pose.rotation.y()
                     << ' ' << node.opt_pose.rotation.z()
                     << ' ' << node.opt_pose.rotation.w()
+                    << std::endl;
+            outFile_orig << node.time_stamp.toSec()
+                    << ' ' << node.pose.position.x()
+                    << ' ' << node.pose.position.y()
+                    << ' ' << node.pose.position.z()
+                    << ' ' << node.pose.rotation.x()
+                    << ' ' << node.pose.rotation.y()
+                    << ' ' << node.pose.rotation.z()
+                    << ' ' << node.pose.rotation.w()
+                    << std::endl;
+        }
+        outFile_opt.close();
+        outFile_orig.close();
+
+        if(output_gt_pose){
+            std::ofstream outFile_gt(file_path + "gt_pose.csv", std::ios::out);
+            if(!outFile_gt){
+                ROS_ERROR_STREAM("Cannot write file : " << file_path + "gt_pose.csv");
+                return;
+            }
+            for(int i = 0; i < nodes.size(); ++i){
+                const auto& node = nodes.at(i);
+                outFile_gt << node.time_stamp.toSec()
+                        << ' ' << node.gt_pose.position.x()
+                        << ' ' << node.gt_pose.position.y()
+                        << ' ' << node.gt_pose.position.z()
+                        << ' ' << node.gt_pose.rotation.x()
+                        << ' ' << node.gt_pose.rotation.y()
+                        << ' ' << node.gt_pose.rotation.z()
+                        << ' ' << node.gt_pose.rotation.w()
+                        << std::endl;
+            }
+            outFile_gt.close();
+        }
+    }
+
+    void WritePoseToFile(const std::string& file_path_name, const std::vector<geometry_msgs::PoseStamped> gt_poses){
+        // in TUM format
+        std::ofstream outFile(file_path_name, std::ios::out);
+        if(!outFile){
+            ROS_ERROR_STREAM("Cannot write file : " << file_path_name);
+            return;
+        }
+        for(int i = 0; i < gt_poses.size(); ++i){
+            auto& pose = gt_poses.at(i);
+            outFile << pose.header.stamp.toSec()
+                    << ' ' << pose.pose.position.x
+                    << ' ' << pose.pose.position.y 
+                    << ' ' << pose.pose.position.z 
+                    << ' ' << pose.pose.orientation.x
+                    << ' ' << pose.pose.orientation.y
+                    << ' ' << pose.pose.orientation.z
+                    << ' ' << pose.pose.orientation.w
                     << std::endl;
         }
         outFile.close();
@@ -133,9 +191,10 @@ namespace{
 void BackEnd::Init(){
     param_use_robust_kernel_ = true;
     param_use_gnss_ = false;
+    align_gt_poses_ = false;
     lidar_frame_nums_ = 0;
     node_nums_ = 0;
-    param_output_file_path = kworking_folder + "opt_pose.csv";
+    param_output_file_path = kworking_folder;
     param_output_pcdfile_path = kworking_folder + "total_map.pcd";
 
     ROS_INFO_STREAM("kMaxIteration: " << kMaxIteration);
@@ -169,6 +228,7 @@ void BackEnd::Init(){
     point_clouds_.reserve(1000);
     gnss_.reserve(1000);
     odometry_poses_.reserve(1000);
+    gt_poses_.reserve(1000);
 
     pose_cloud.reset(new pcl::PointCloud<pcl::PointXYZI>());
 
@@ -187,13 +247,15 @@ void BackEnd::Init(){
 // read bag file to load poses, gnss readings and lidar points
 void BackEnd::ReadDataFromBag(std::vector<sensor_msgs::PointCloud2>& point_clouds,\
                                 std::vector<sensor_msgs::NavSatFix>& gnss,\
-                                std::vector<geometry_msgs::PoseStamped>& odometry_poses){
+                                std::vector<geometry_msgs::PoseStamped>& odometry_poses,\
+                                std::vector<geometry_msgs::PoseStamped>& gt_odometry_poses){
     rosbag::Bag bag;    
 
     bag.open(param_bag_full_path_, rosbag::bagmode::Read);
     std::vector<std::string> topics;
     topics.push_back(param_lidar_topic_);
     topics.push_back(param_pose_topic_);
+    topics.push_back(param_gt_pose_topic_);
     topics.push_back(param_gnss_topic_);
 
     rosbag::View view(bag, rosbag::TopicQuery(topics));
@@ -212,6 +274,7 @@ void BackEnd::ReadDataFromBag(std::vector<sensor_msgs::PointCloud2>& point_cloud
                 point_clouds.emplace_back(*message);
         }
         if (m.getTopic() == param_pose_topic_ || ("/" + m.getTopic() == param_pose_topic_)){
+            // because the type of output odometry from different slam method is not same
             // TODO: determine which kind of message to use here
             geometry_msgs::PoseStamped::Ptr message0 = m.instantiate<geometry_msgs::PoseStamped>();
             if (message0 != NULL){
@@ -233,19 +296,33 @@ void BackEnd::ReadDataFromBag(std::vector<sensor_msgs::PointCloud2>& point_cloud
                 gnss.emplace_back(*message);
             }
         }
+
+        if (m.getTopic() == param_gt_pose_topic_ || ("/" + m.getTopic() == param_gt_pose_topic_)){
+            geometry_msgs::PoseStamped::Ptr message0 = m.instantiate<geometry_msgs::PoseStamped>();
+            if (message0 != NULL){
+                gt_odometry_poses.emplace_back(*message0);
+                continue;
+            }
+        }
     }
     bag.close();
 }
 
 void BackEnd::AlignTimeStamp(std::vector<sensor_msgs::PointCloud2>& point_clouds,
                                 std::vector<sensor_msgs::NavSatFix>& gnss,
-                                std::vector<geometry_msgs::PoseStamped>& odometry_poses){
+                                std::vector<geometry_msgs::PoseStamped>& odometry_poses,
+                                std::vector<geometry_msgs::PoseStamped>& gt_odometry_poses){
     // temporarily store the output
     std::vector<sensor_msgs::PointCloud2> temp_pc;
     std::vector<sensor_msgs::NavSatFix> temp_gnss;
     std::vector<geometry_msgs::PoseStamped> temp_op;
+    std::vector<geometry_msgs::PoseStamped> temp_gt_op;
+    if(!gt_odometry_poses.empty()){
+        align_gt_poses_ = true;
+        ROS_INFO_STREAM("We have gt poses. Gt poses are considered into alignment!");
+    }
 
-    int index_gnss = 0, index_op = 0;
+    int index_gnss = 0, index_op = 0, index_gt_op = 0;
     for(auto& pc : point_clouds){
         double pc_time = pc.header.stamp.toSec();
         // if align failed, we discard this lidar frame
@@ -253,6 +330,15 @@ void BackEnd::AlignTimeStamp(std::vector<sensor_msgs::PointCloud2>& point_clouds
         if(param_use_gnss_){
             if(FindNearstTwoFrame(gnss, pc_time, index_gnss) 
                 && FindNearstTwoFrame(odometry_poses, pc_time, index_op)){
+                if(align_gt_poses_){
+                    if(FindNearstTwoFrame(gt_odometry_poses, pc_time, index_gt_op)){
+                        temp_gt_op.emplace_back();
+                        auto& target_gt_pose = temp_gt_op.back();
+                        InterpolateTargetPose(target_gt_pose, pc.header, gt_odometry_poses[index_gt_op], gt_odometry_poses[index_gt_op+1]);
+                    }
+                    else
+                        continue;
+                }
                 temp_pc.emplace_back(pc);
                 // form new GNSS
                 temp_gnss.emplace_back();
@@ -266,6 +352,15 @@ void BackEnd::AlignTimeStamp(std::vector<sensor_msgs::PointCloud2>& point_clouds
         }
         else{
             if(FindNearstTwoFrame(odometry_poses, pc_time, index_op)){
+                if(align_gt_poses_){
+                    if(FindNearstTwoFrame(gt_odometry_poses, pc_time, index_gt_op)){
+                        temp_gt_op.emplace_back();
+                        auto& target_gt_pose = temp_gt_op.back();
+                        InterpolateTargetPose(target_gt_pose, pc.header, gt_odometry_poses[index_gt_op], gt_odometry_poses[index_gt_op+1]);
+                    }
+                    else
+                        continue;
+                }
                 temp_pc.emplace_back(pc);
                 // form new odometry pose
                 temp_op.emplace_back();
@@ -282,27 +377,45 @@ void BackEnd::AlignTimeStamp(std::vector<sensor_msgs::PointCloud2>& point_clouds
     point_clouds.swap(temp_pc);
     gnss.swap(temp_gnss);
     odometry_poses.swap(temp_op);
+    if(align_gt_poses_)
+        gt_odometry_poses.swap(temp_gt_op);
 }
 
 void BackEnd::CollectData(){
-    ReadDataFromBag(point_clouds_, gnss_, odometry_poses_);
+    ReadDataFromBag(point_clouds_, gnss_, odometry_poses_, gt_poses_);
     if(param_use_gnss_ && gnss_.size() == 0){
         ROS_ERROR("set use gnss but no gnss data!");
         ros::shutdown();
     }
     ROS_INFO_STREAM("Origin vector size, point_clouds: " << point_clouds_.size()
                                             << ", gnss: " << gnss_.size() 
-                                            << ", odometry: " << odometry_poses_.size());
+                                            << ", odometry: " << odometry_poses_.size()
+                                            << ", gt odometry: " << gt_poses_.size());
 
-    AlignTimeStamp(point_clouds_, gnss_, odometry_poses_);
+    AlignTimeStamp(point_clouds_, gnss_, odometry_poses_, gt_poses_);
     ROS_INFO_STREAM("Vector size after timestamp alignment, point_clouds: " << point_clouds_.size()
                                                 << ", gnss: " << gnss_.size() 
-                                                << ", odometry: " << odometry_poses_.size());
+                                                << ", odometry: " << odometry_poses_.size()
+                                                << ", gt odometry: " << gt_poses_.size());
     if(param_use_gnss_)
         assert(point_clouds_.size() == gnss_.size() && point_clouds_.size() == odometry_poses_.size());    
     else
         assert(point_clouds_.size() == odometry_poses_.size());    
 
+    if(gt_poses_.size() != 0)
+        assert(point_clouds_.size() == gt_poses_.size());
+
+    // Only temporarily
+    // {
+    //     ROS_INFO_STREAM("write data to: " << kworking_folder + "orig_pose.csv");
+    //     WritePoseToFile(kworking_folder + "orig_pose.csv", odometry_poses_);
+    //     ROS_INFO_STREAM("write data to: " << kworking_folder + "gt_pose.csv");
+    //     WritePoseToFile(kworking_folder + "gt_pose.csv", gt_poses_);
+    //     ROS_INFO_STREAM("write data finished! prepare to quit!");
+    //     std::exit(0);
+    // }
+
+    // lambda function for submap construction
     auto ConstructSubmap = [this](int left, int mid, int right, Node& node, const int interval){
         left = left < 0? 0: left;
         right = right > point_clouds_.size()-1? point_clouds_.size()-1: right;
@@ -389,6 +502,15 @@ void BackEnd::CollectData(){
                                                     odometry_poses_[pointcloud_index].pose.orientation.x,
                                                     odometry_poses_[pointcloud_index].pose.orientation.y,
                                                     odometry_poses_[pointcloud_index].pose.orientation.z);
+        if(align_gt_poses_){
+            temp_node.gt_pose.position.translation() << gt_poses_[pointcloud_index].pose.position.x, 
+                                                    gt_poses_[pointcloud_index].pose.position.y,
+                                                    gt_poses_[pointcloud_index].pose.position.z;
+            temp_node.gt_pose.rotation = Eigen::Quaterniond(gt_poses_[pointcloud_index].pose.orientation.w,
+                                                        gt_poses_[pointcloud_index].pose.orientation.x,
+                                                        gt_poses_[pointcloud_index].pose.orientation.y,
+                                                        gt_poses_[pointcloud_index].pose.orientation.z);
+        }
         // 3. fill gnss pose and information
         // change gps readings in wsg84 to utm
         if(param_use_gnss_){
@@ -644,7 +766,7 @@ void BackEnd::Run(){
 
     ROS_INFO("**************  write data  **************");
     ROS_INFO_STREAM("write data to: " << param_output_file_path);
-    WritePoseToFile(param_output_file_path, nodes);
+    WritePoseToFile(param_output_file_path, nodes, align_gt_poses_);
     WriteFinalPointCloudToPCDFile(kworking_folder+"orig_map.pcd", nodes, true);
     WriteFinalPointCloudToPCDFile(param_output_pcdfile_path, nodes, false);
     ros::WallTime aft(ros::WallTime::now());

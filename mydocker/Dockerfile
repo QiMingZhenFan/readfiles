@@ -80,6 +80,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
 	libgeographic-dev \
 	libpcap-dev \
 	python-pip \
+  python3-pip \
   && DEBIAN_FRONTEND=noninteractive apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get autoclean \
   && DEBIAN_FRONTEND=noninteractive apt-get autoremove \
@@ -88,7 +89,9 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
   && pip install flask -i https://pypi.tuna.tsinghua.edu.cn/simple --no-cache-dir\
   && pip install ConfigParser -i https://pypi.tuna.tsinghua.edu.cn/simple --no-cache-dir\
   && pip install requests -i https://pypi.tuna.tsinghua.edu.cn/simple --no-cache-dir\
-  && pip install cmake==3.16.6 --no-cache-dir
+  && pip install cmake==3.16.6 --no-cache-dir\
+  && pip3 install numpy --no-cache-dir\
+  && pip3 install matplotlib --no-cache-dir
 
 # install g2o  -- cmake 3.14 or higher required
 RUN if [ "x$(nproc)" = "x1" ] ; then export USE_PROC=1 ; else export USE_PROC=$(($(nproc)/2)) ; fi \
