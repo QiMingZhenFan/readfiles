@@ -1,0 +1,11 @@
+[user]
+	email = maruikai@trunk.tech
+	name = Ma Ruikai
+[mergetool]
+	keepBackup = false
+[http]
+	proxy = socks5://127.0.0.1:7890
+[https]
+	proxy = socks5://127.0.0.1:7890
+[safe]
+	directory = /home/mrk/workspace/kiss-icp-ws/src/kiss-icp
